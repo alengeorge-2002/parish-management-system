@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { CheckCircle2, X, Cross, Lock, ShieldCheck, Key } from "lucide-react";
+import { CheckCircle2, X, Cross, Lock, Key, Eye, EyeOff } from "lucide-react";
 import { AppProvider, useApp } from "./lib/app-context";
 import Sidebar from "./components/Sidebar";
 import Header from "./components/Header";
@@ -92,6 +92,7 @@ function Shell({ session, onLogout }: { session: UserSession; onLogout: () => vo
 export default function App() {
   const [session, setSessionState] = useState<UserSession | null>(null);
   const [accessKey, setAccessKey] = useState("");
+  const [showKey, setShowKey] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [verifying, setVerifying] = useState(true);
@@ -140,10 +141,6 @@ export default function App() {
     }
   };
 
-  const handleOfflineMockBypass = () => {
-    setAccessKey("access_key_admin_123");
-  };
-
   const handleLogout = () => {
     clearSession();
     setSessionState(null);
@@ -186,12 +183,20 @@ export default function App() {
               <div className="relative flex items-center">
                 <Key className="absolute left-3 h-4 w-4 text-muted-foreground" />
                 <Input
-                  type="password"
-                  placeholder="Enter access key e.g. access_key_admin_123"
+                  type={showKey ? "text" : "password"}
+                  placeholder="Enter administrator access key"
                   value={accessKey}
                   onChange={(e) => setAccessKey(e.target.value)}
-                  className="pl-9 text-center font-mono"
+                  className="pl-9 pr-9 text-center font-mono"
                 />
+                <button
+                  type="button"
+                  onClick={() => setShowKey(!showKey)}
+                  className="absolute right-3 flex items-center justify-center text-muted-foreground hover:text-foreground focus:outline-none transition-colors"
+                  aria-label={showKey ? "Hide access key" : "Show access key"}
+                >
+                  {showKey ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                </button>
               </div>
             </Field>
 
@@ -199,14 +204,6 @@ export default function App() {
               <Lock className="h-4 w-4" />
               {loading ? "Authenticating..." : "Secure Administrator Login"}
             </Button>
-
-            <div className="mt-6 space-y-2 border-t border-border pt-4 text-center">
-              <p className="text-[11px] text-muted-foreground">Testing locally? Load default admin credentials:</p>
-              <Button variant="secondary" onClick={handleOfflineMockBypass} className="w-full text-[12px]">
-                <ShieldCheck className="h-3.5 w-3.5 text-primary" />
-                Load Seeded Admin Key
-              </Button>
-            </div>
           </div>
         </Card>
       </div>
