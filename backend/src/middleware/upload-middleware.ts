@@ -1,22 +1,23 @@
-import multer from 'multer';
+import { Request } from 'express';
+import multer, { FileFilterCallback } from 'multer';
 import path from 'path';
 import fs from 'fs';
 
 const storage = multer.diskStorage({
-  destination: (req, file, cb) => {
+  destination: (req: Request, file: Express.Multer.File, cb: (error: Error | null, destination: string) => void) => {
     const uploadDir = path.join(process.cwd(), 'uploads/family-photos');
     // Ensure directory exists
     fs.mkdirSync(uploadDir, { recursive: true });
     cb(null, uploadDir);
   },
-  filename: (req, file, cb) => {
+  filename: (req: Request, file: Express.Multer.File, cb: (error: Error | null, filename: string) => void) => {
     const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
     const ext = path.extname(file.originalname);
     cb(null, 'family-' + uniqueSuffix + ext);
   }
 });
 
-const fileFilter = (req: any, file: any, cb: any) => {
+const fileFilter = (req: Request, file: Express.Multer.File, cb: FileFilterCallback) => {
   const allowedTypes = ['image/png', 'image/jpeg', 'image/jpg'];
   if (allowedTypes.includes(file.mimetype)) {
     cb(null, true);
@@ -34,13 +35,13 @@ export const uploadFamilyPhoto = multer({
 });
 
 const clergyStorage = multer.diskStorage({
-  destination: (req, file, cb) => {
+  destination: (req: Request, file: Express.Multer.File, cb: (error: Error | null, destination: string) => void) => {
     const uploadDir = path.join(process.cwd(), 'uploads/clergy-avatars');
     // Ensure directory exists
     fs.mkdirSync(uploadDir, { recursive: true });
     cb(null, uploadDir);
   },
-  filename: (req, file, cb) => {
+  filename: (req: Request, file: Express.Multer.File, cb: (error: Error | null, filename: string) => void) => {
     const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
     const ext = path.extname(file.originalname);
     cb(null, 'clergy-' + uniqueSuffix + ext);

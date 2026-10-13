@@ -1,4 +1,4 @@
-import { Request, Response } from 'express';
+import { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
 import { AppUser } from '../models';
 import { generateAccessKey } from '../utils/crypto-utils';

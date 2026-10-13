@@ -1,4 +1,4 @@
-import express from 'express';
+import express, { Request, Response, NextFunction } from 'express';
 import cors from 'cors';
 import path from 'path';
 import apiRouter from './routes';
@@ -31,7 +31,7 @@ app.use('/uploads', express.static(path.join(process.cwd(), 'uploads')));
 // Mount central API routes
 app.use('/api', apiRouter);
 
-app.get('/', (req, res) => {
+app.get('/', (req: Request, res: Response) => {
   res.send('Parish Management API (MongoDB Serverless)');
 });
 

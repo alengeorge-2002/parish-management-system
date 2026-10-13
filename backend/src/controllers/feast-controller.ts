@@ -1,4 +1,4 @@
-import { Request, Response } from 'express';
+import { Request, Response, NextFunction } from 'express';
 import { Event } from '../models';
 import { sendPushToAllParishioners } from '../utils/pushNotifier';
 

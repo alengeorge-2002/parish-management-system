@@ -1,4 +1,4 @@
-import { Request, Response } from 'express';
+import { Request, Response, NextFunction } from 'express';
 import { ReligiousHouse } from '../models';
 
 const SAMPLE_RESIDENTS: Record<string, any[]> = {
