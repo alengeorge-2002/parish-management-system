@@ -28,11 +28,22 @@ app.use(cors({
 app.use(express.json());
 app.use('/uploads', express.static(path.join(process.cwd(), 'uploads')));
 
+// Dedicated Health check route
+app.get('/api/health', (_req: Request, res: Response) => {
+  res.status(200).json({ status: 'ok', uptime: process.uptime(), timestamp: new Date().toISOString() });
+});
+
 // Mount central API routes
 app.use('/api', apiRouter);
 
-app.get('/', (req: Request, res: Response) => {
-  res.send('Parish Management API (PostgreSQL)');
+// Fallback root route indicating API is active
+app.get('/', (_req: Request, res: Response) => {
+  res.status(200).json({
+    status: 'ok',
+    message: 'Parish Management API (PostgreSQL)',
+    uptime: process.uptime(),
+    timestamp: new Date().toISOString()
+  });
 });
 
 export default app;

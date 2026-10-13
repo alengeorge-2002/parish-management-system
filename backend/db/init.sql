@@ -139,17 +139,22 @@ CREATE TABLE IF NOT EXISTS clergy_directory (
     phone_number VARCHAR(100),
     blood_group VARCHAR(50),
     avatar_url VARCHAR(255),
-    display_order INT DEFAULT 0,
+    display_order INTEGER DEFAULT 0,
     is_quick_contact BOOLEAN DEFAULT false,
     house_id INT
 );
+
+ALTER TABLE clergy_directory ADD COLUMN IF NOT EXISTS display_order INTEGER DEFAULT 0;
+ALTER TABLE clergy_directory ADD COLUMN IF NOT EXISTS is_quick_contact BOOLEAN DEFAULT false;
+ALTER TABLE clergy_directory ADD COLUMN IF NOT EXISTS house_id INT;
+CREATE UNIQUE INDEX IF NOT EXISTS idx_clergy_directory_name ON clergy_directory(name);
 
 INSERT INTO clergy_directory (name, role_type, designation, address, email, phone_number, blood_group, avatar_url, display_order) VALUES
 ('Rev. Fr. Joseph Mathew', 'parish-priest', 'Vicar', NULL, 'pp.stjosephdevagiri@gmail.com', '+91 98450 00001', 'O+', NULL, 1),
 ('Rev. Fr. George Varghese', 'parish-priest', 'Associate Pastor', NULL, 'assoc.stjosephdevagiri@gmail.com', '+91 98450 00002', 'O+', NULL, 2),
 ('Sr. Anitha Thomas', 'sister', 'School Principal', 'CMC', NULL, '+91 98450 00003', 'O+', NULL, 3),
 ('Sr. Mary Joseph', 'sister', 'Social Service Wing', 'CMI', NULL, '+91 98450 00004', 'O+', NULL, 4)
-ON CONFLICT DO NOTHING;
+ON CONFLICT (name) DO NOTHING;
 
 CREATE TABLE IF NOT EXISTS events (
     id SERIAL PRIMARY KEY,

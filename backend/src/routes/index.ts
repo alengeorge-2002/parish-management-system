@@ -21,6 +21,9 @@ router.post('/wards/:id/units', addUnitToWard);
 router.get('/families', getAllFamilies);
 router.post('/families', createFamily);
 router.put('/families/:id', updateFamily);
+router.get('/health', (_req, res) => {
+  res.status(200).json({ status: 'ok', uptime: process.uptime(), timestamp: new Date().toISOString() });
+});
 router.get('/parishioners', search);
 router.get('/clergy/quick-contacts', getQuickContacts);
 
