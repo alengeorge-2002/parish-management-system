@@ -1,0 +1,33 @@
+{
+  "id": "devagiri-parishioner-app-v1",
+  "short_name": "Devagiri Parish",
+  "name": "Devagiri St. Joseph Parish App",
+  "description": "St. Joseph Devagiri Parish Management and Community App",
+  "icons": [
+    {
+      "src": "/icon-192.png",
+      "type": "image/png",
+      "sizes": "192x192",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon-512.png",
+      "type": "image/png",
+      "sizes": "512x512",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon-512.png",
+      "type": "image/png",
+      "sizes": "512x512",
+      "purpose": "maskable"
+    }
+  ],
+  "start_url": "/",
+  "scope": "/",
+  "background_color": "#141414",
+  "theme_color": "#F4C430",
+  "display": "standalone",
+  "orientation": "portrait",
+  "categories": ["lifestyle", "utilities"]
+}

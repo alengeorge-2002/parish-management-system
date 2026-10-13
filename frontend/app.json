@@ -1,0 +1,56 @@
+{
+  "expo": {
+    "name": "Devagiri Parish",
+    "slug": "frontend",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/parish_interior.png",
+    "userInterfaceStyle": "light",
+    "newArchEnabled": true,
+    "splash": {
+      "image": "./assets/parish_interior.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#ffffff"
+    },
+    "ios": {
+      "supportsTablet": true
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/parish_interior.png",
+        "backgroundColor": "#ffffff"
+      },
+      "edgeToEdgeEnabled": true,
+      "predictiveBackGestureEnabled": false,
+      "package": "com.georgealen2002.frontend"
+    },
+    "web": {
+      "favicon": "./assets/icon.png",
+      "bundler": "metro",
+      "name": "Devagiri St. Joseph Parish App",
+      "shortName": "Devagiri Parish",
+      "description": "St. Joseph Devagiri Parish Management and Community App",
+      "themeColor": "#F4C430",
+      "backgroundColor": "#141414",
+      "display": "standalone",
+      "orientation": "portrait",
+      "startUrl": "/",
+      "scope": "/"
+    },
+
+    "extra": {
+      "eas": {
+        "projectId": "36582617-f90f-4f8a-a4c3-4cc64ed5bfd0"
+      }
+    },
+    "plugins": [
+      "expo-secure-store"
+    ],
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/36582617-f90f-4f8a-a4c3-4cc64ed5bfd0"
+    }
+  }
+}

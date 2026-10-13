@@ -1,0 +1,26 @@
+{
+  "name": "parish-management-app",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "npx concurrently \"npm run dev -w backend\" \"npm start -w frontend\" \"npm run dev -w admin-dashboard\""
+  },
+  "workspaces": [
+    "backend",
+    "frontend",
+    "admin-dashboard"
+  ],
+
+
+  "devDependencies": {
+    "concurrently": "^8.2.2"
+  },
+  "dependencies": {
+    "expo-secure-store": "~15.0.8"
+  },
+  "overrides": {
+    "react-native-safe-area-context": "~5.6.0",
+    "react-native-screens": "~4.16.0",
+    "expo-secure-store": "~15.0.8"
+  }
+}

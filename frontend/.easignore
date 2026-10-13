@@ -1,0 +1,27 @@
+# EAS Build Ignore Rules
+# Dependencies
+node_modules/
+
+# Expo Cache & Local Builds
+.expo/
+dist/
+web-build/
+
+# Android Build Outputs & Native files
+android/
+android-build/
+*.apk
+*.aab
+*.jks
+*.keystore
+
+# iOS Native files
+ios/
+*.ipa
+*.xcarchive
+
+# Temp & logs
+*.log
+.DS_Store
+.env.local
+.env.production.local
