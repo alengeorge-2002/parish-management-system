@@ -1,6 +1,6 @@
 import { Router, Request, Response } from "express";
 import { VAPID_PUBLIC_KEY } from "../config/vapid";
-import { PushSubscription } from "../models/PushSubscription";
+import { pool } from "../config/db";
 import { sendPushToAllParishioners } from "../utils/pushNotifier";
 
 const router = Router();
@@ -10,7 +10,7 @@ router.get("/vapid-key", (_req: Request, res: Response) => {
   res.json({ publicKey: VAPID_PUBLIC_KEY });
 });
 
-// POST /api/notifications/subscribe -> saves/upserts endpoint & keys in MongoDB
+// POST /api/notifications/subscribe -> saves/upserts endpoint & keys in PostgreSQL
 router.post("/subscribe", async (req: Request, res: Response) => {
   try {
     const { endpoint, keys, deviceType } = req.body;
@@ -19,18 +19,17 @@ router.post("/subscribe", async (req: Request, res: Response) => {
       return;
     }
 
-    const subscription = await PushSubscription.findOneAndUpdate(
-      { endpoint },
-      {
-        endpoint,
-        keys,
-        deviceType: deviceType || "web",
-        createdAt: new Date(),
-      },
-      { upsert: true, new: true }
+    const result = await pool.query(
+      `INSERT INTO push_subscriptions (endpoint, keys, device_type)
+       VALUES ($1, $2, $3)
+       ON CONFLICT (endpoint) DO UPDATE SET
+         keys = EXCLUDED.keys,
+         device_type = EXCLUDED.device_type
+       RETURNING *`,
+      [endpoint, JSON.stringify(keys), deviceType || "web"]
     );
 
-    res.status(201).json({ message: "Subscription saved successfully", subscription });
+    res.status(201).json({ message: "Subscription saved successfully", subscription: result.rows[0] });
   } catch (error: any) {
     console.error("[NotificationRouter] Error saving subscription:", error);
     res.status(500).json({ error: error.message || "Failed to save push subscription" });
@@ -46,7 +45,7 @@ router.post("/unsubscribe", async (req: Request, res: Response) => {
       return;
     }
 
-    await PushSubscription.deleteOne({ endpoint });
+    await pool.query('DELETE FROM push_subscriptions WHERE endpoint = $1', [endpoint]);
     res.json({ message: "Subscription removed successfully" });
   } catch (error: any) {
     console.error("[NotificationRouter] Error removing subscription:", error);

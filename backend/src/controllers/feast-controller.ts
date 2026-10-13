@@ -1,14 +1,22 @@
 import { Request, Response, NextFunction } from 'express';
-import { Event } from '../models';
+import { pool } from '../config/db';
 import { sendPushToAllParishioners } from '../utils/pushNotifier';
+
+const parseId = (val: any): number | null => {
+  if (!val) return null;
+  const num = parseInt(String(val), 10);
+  return isNaN(num) ? null : num;
+};
 
 /**
  * Fetches all feasts sorted by event date (ascending).
  */
 export const getAllFeasts = async (_req: Request, res: Response) => {
   try {
-    const list = await Event.find().sort({ event_date: 1, created_at: 1 });
-    res.json(list);
+    const result = await pool.query(
+      `SELECT *, id as _id FROM events ORDER BY event_date ASC, created_at ASC`
+    );
+    res.json(result.rows);
   } catch (error) {
     console.error('Fetch feasts error:', error);
     res.status(500).json({ error: 'Internal server error' });
@@ -30,19 +38,28 @@ export const createFeast = async (req: Request, res: Response): Promise<void> =>
       return;
     }
 
-    const event = await Event.create({
-      title: eventTitle,
-      title_en: title_en || eventTitle,
-      title_ml: title_ml || '',
-      event_date: dateVal,
-      target_date: dateVal,
-      mass_time: massTime || '6:00 AM',
-      type_badge: typeBadge || 'Feast',
-      location: location || 'Main Sanctuary',
-      description: description || description_en || null,
-      description_en: description_en || description || '',
-      description_ml: description_ml || '',
-    });
+    const result = await pool.query(
+      `INSERT INTO events (
+         title, title_en, title_ml, event_date, target_date,
+         mass_time, type_badge, location, description, description_en, description_ml
+       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+       RETURNING *, id as _id`,
+      [
+        eventTitle.trim(),
+        (title_en || eventTitle).trim(),
+        title_ml || '',
+        dateVal,
+        dateVal,
+        massTime || '6:00 AM',
+        typeBadge || 'Feast',
+        location || 'Main Sanctuary',
+        description || description_en || null,
+        description_en || description || '',
+        description_ml || ''
+      ]
+    );
+
+    const event = result.rows[0];
 
     // Trigger Web Push to all subscribed parishioners
     sendPushToAllParishioners({
@@ -64,29 +81,16 @@ export const createFeast = async (req: Request, res: Response): Promise<void> =>
  */
 export const getAllEvents = async (_req: Request, res: Response): Promise<void> => {
   try {
-    const list = await Event.find().sort({ event_date: 1, target_date: 1, created_at: 1 });
-    const mapped = list.map((item: any) => {
-      const row = item.toObject ? item.toObject() : item;
-      let targetDateStr = '';
-      const rawDate = row.target_date || row.event_date;
-      if (rawDate) {
-        try {
-          if (rawDate instanceof Date) {
-            const year = rawDate.getFullYear();
-            const month = (rawDate.getMonth() + 1).toString().padStart(2, '0');
-            const day = rawDate.getDate().toString().padStart(2, '0');
-            targetDateStr = `${year}-${month}-${day}`;
-          } else {
-            targetDateStr = String(rawDate).split('T')[0];
-          }
-        } catch (_) {
-          targetDateStr = String(rawDate).split('T')[0];
-        }
-      }
+    const result = await pool.query(
+      `SELECT *, id as _id FROM events ORDER BY event_date ASC, target_date ASC, created_at ASC`
+    );
+    const mapped = result.rows.map((row: any) => {
+      const targetDateStr = String(row.target_date || row.event_date || '').split('T')[0];
       return {
         ...row,
-        id: row._id ? row._id.toString() : row.id,
-        target_date: targetDateStr || rawDate,
+        id: String(row.id),
+        _id: String(row.id),
+        target_date: targetDateStr,
         title_en: row.title_en || row.title,
         title_ml: row.title_ml || '',
         description_en: row.description_en || row.description || '',
@@ -105,10 +109,14 @@ export const getAllEvents = async (_req: Request, res: Response): Promise<void> 
  */
 export const deleteFeast = async (req: Request, res: Response): Promise<void> => {
   try {
-    const { id } = req.params;
-    const deleted = await Event.findByIdAndDelete(id);
-    
-    if (!deleted) {
+    const id = parseId(req.params.id);
+    if (!id) {
+      res.status(400).json({ error: 'Valid id required' });
+      return;
+    }
+
+    const result = await pool.query('DELETE FROM events WHERE id = $1 RETURNING id', [id]);
+    if (result.rows.length === 0) {
       res.status(404).json({ error: 'Feast not found' });
       return;
     }
@@ -131,17 +139,13 @@ export const getTodayEvents = async (_req: Request, res: Response): Promise<void
     const day = String(today.getDate()).padStart(2, '0');
     const todayStr = `${year}-${month}-${day}`;
 
-    const startOfDay = new Date(year, today.getMonth(), today.getDate(), 0, 0, 0, 0);
-    const endOfDay = new Date(year, today.getMonth(), today.getDate(), 23, 59, 59, 999);
-
-    const todayList = await Event.find({
-      $or: [
-        { target_date: todayStr },
-        { event_date: todayStr },
-        { target_date: { $gte: startOfDay, $lte: endOfDay } },
-        { event_date: { $gte: startOfDay, $lte: endOfDay } },
-      ],
-    }).sort({ created_at: 1 });
+    const result = await pool.query(
+      `SELECT *, id as _id FROM events
+       WHERE target_date = $1 OR event_date = $1
+       ORDER BY created_at ASC`,
+      [todayStr]
+    );
+    const todayList = result.rows;
 
     const massTimings = todayList
       .map((item: any) => item.mass_time)
@@ -174,4 +178,3 @@ export const getTodayEvents = async (_req: Request, res: Response): Promise<void
     res.status(500).json({ error: 'Internal server error' });
   }
 };
-

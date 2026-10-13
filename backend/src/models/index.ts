@@ -1,6 +1,7 @@
 export * from './Ward';
 export * from './Family';
 export * from './Parishioner';
+export * from './Member';
 export * from './Clergy';
 export * from './Event';
 export * from './Organization';
@@ -11,3 +12,4 @@ export * from './ParishCouncil';
 export * from './ReligiousHouse';
 export * from './Unit';
 export * from './Calendar';
+export * from './PushSubscription';

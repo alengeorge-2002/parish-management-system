@@ -1,5 +1,11 @@
 import { Request, Response, NextFunction } from 'express';
-import { ReligiousHouse } from '../models';
+import { pool } from '../config/db';
+
+const parseId = (val: any): number | null => {
+  if (!val) return null;
+  const num = parseInt(String(val), 10);
+  return isNaN(num) ? null : num;
+};
 
 const SAMPLE_RESIDENTS: Record<string, any[]> = {
   Convent: [
@@ -27,19 +33,21 @@ const SAMPLE_RESIDENTS: Record<string, any[]> = {
 
 /**
  * GET /api/directory/religious-houses or /api/admin/religious-houses
- * Returns all religious houses in database.
  */
-export const getAllReligiousHouses = async (req: Request, res: Response): Promise<any> => {
+export const getAllReligiousHouses = async (_req: Request, res: Response): Promise<any> => {
   try {
-    const list = await ReligiousHouse.find().sort({ name: 1 });
-    const mapped = list.map((item: any) => {
-      const obj = item.toObject ? item.toObject() : item;
-      const typeKey = obj.category || obj.category_type || 'Convent';
+    const result = await pool.query(
+      `SELECT *, id as _id FROM religious_houses ORDER BY name ASC`
+    );
+    const mapped = result.rows.map((row: any) => {
+      const typeKey = row.category || row.category_type || 'Convent';
       const defaultList = SAMPLE_RESIDENTS[typeKey] || SAMPLE_RESIDENTS['Convent'];
+      const residents = (Array.isArray(row.residents) && row.residents.length > 0) ? row.residents : defaultList;
       return {
-        ...obj,
-        id: obj._id ? obj._id.toString() : obj.id,
-        residents: (obj.residents && obj.residents.length > 0) ? obj.residents : defaultList,
+        ...row,
+        id: String(row.id),
+        _id: String(row.id),
+        residents,
       };
     });
     res.status(200).json(mapped);
@@ -51,7 +59,6 @@ export const getAllReligiousHouses = async (req: Request, res: Response): Promis
 
 /**
  * POST /api/admin/religious-houses
- * Creates a new religious house.
  */
 export const createReligiousHouse = async (req: Request, res: Response): Promise<any> => {
   const { name, category, category_type, superiorInCharge, superior_in_charge, residentCount, resident_count, contactNumber, contact_number, email, address, photoUrl, photo_url } = req.body;
@@ -66,18 +73,17 @@ export const createReligiousHouse = async (req: Request, res: Response): Promise
   const photo = photoUrl || photo_url || '';
 
   try {
-    const house = await ReligiousHouse.create({
-      name: name.trim(),
-      category: cat.trim(),
-      category_type: cat.trim(),
-      superior_in_charge: sup.trim(),
-      resident_count: count,
-      contact_number: phone.trim(),
-      email: email ? email.trim() : '',
-      address: address ? address.trim() : '',
-      photo_url: photo,
-    });
-    res.status(201).json(house);
+    const defaultList = SAMPLE_RESIDENTS[cat] || SAMPLE_RESIDENTS['Convent'];
+    const result = await pool.query(
+      `INSERT INTO religious_houses (
+         name, category, category_type, superior_in_charge, resident_count,
+         contact_number, email, address, photo_url, residents
+       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+       RETURNING *, id as _id`,
+      [name.trim(), cat.trim(), cat.trim(), sup.trim(), count, phone.trim(), email ? email.trim() : '', address ? address.trim() : '', photo, JSON.stringify(defaultList)]
+    );
+    const row = result.rows[0];
+    res.status(201).json({ ...row, id: String(row.id), _id: String(row.id) });
   } catch (error: any) {
     console.error('Error creating religious house:', error);
     res.status(500).json({ error: error.message || 'Internal server error' });
@@ -86,10 +92,11 @@ export const createReligiousHouse = async (req: Request, res: Response): Promise
 
 /**
  * PUT /api/admin/religious-houses/:id
- * Updates an existing religious house.
  */
 export const updateReligiousHouse = async (req: Request, res: Response): Promise<any> => {
-  const { id } = req.params;
+  const id = parseId(req.params.id);
+  if (!id) return res.status(400).json({ error: 'Valid id required' });
+
   const { name, category, category_type, superiorInCharge, superior_in_charge, residentCount, resident_count, contactNumber, contact_number, email, address, photoUrl, photo_url } = req.body;
   if (!name) {
     return res.status(400).json({ error: 'Name is a required field.' });
@@ -102,27 +109,20 @@ export const updateReligiousHouse = async (req: Request, res: Response): Promise
   const photo = photoUrl || photo_url || '';
 
   try {
-    const updated = await ReligiousHouse.findByIdAndUpdate(
-      id,
-      {
-        name: name.trim(),
-        category: cat.trim(),
-        category_type: cat.trim(),
-        superior_in_charge: sup.trim(),
-        resident_count: count,
-        contact_number: phone.trim(),
-        email: email ? email.trim() : '',
-        address: address ? address.trim() : '',
-        photo_url: photo,
-      },
-      { new: true }
+    const result = await pool.query(
+      `UPDATE religious_houses SET
+         name = $1, category = $2, category_type = $3, superior_in_charge = $4,
+         resident_count = $5, contact_number = $6, email = $7, address = $8, photo_url = $9
+       WHERE id = $10
+       RETURNING *, id as _id`,
+      [name.trim(), cat.trim(), cat.trim(), sup.trim(), count, phone.trim(), email ? email.trim() : '', address ? address.trim() : '', photo, id]
     );
 
-    if (!updated) {
+    if (result.rows.length === 0) {
       return res.status(404).json({ error: 'Religious house not found.' });
     }
-
-    res.status(200).json(updated);
+    const row = result.rows[0];
+    res.status(200).json({ ...row, id: String(row.id), _id: String(row.id) });
   } catch (error: any) {
     console.error('Error updating religious house:', error);
     res.status(500).json({ error: error.message || 'Internal server error' });
@@ -131,16 +131,17 @@ export const updateReligiousHouse = async (req: Request, res: Response): Promise
 
 /**
  * DELETE /api/admin/religious-houses/:id
- * Deletes a religious house.
  */
 export const deleteReligiousHouse = async (req: Request, res: Response): Promise<any> => {
-  const { id } = req.params;
+  const id = parseId(req.params.id);
+  if (!id) return res.status(400).json({ error: 'Valid id required' });
+
   try {
-    const deleted = await ReligiousHouse.findByIdAndDelete(id);
-    if (!deleted) {
+    const result = await pool.query('DELETE FROM religious_houses WHERE id = $1 RETURNING id', [id]);
+    if (result.rows.length === 0) {
       return res.status(404).json({ error: 'Religious house not found.' });
     }
-    res.status(204).send();
+    res.status(200).json({ message: 'Religious house deleted successfully.' });
   } catch (error: any) {
     console.error('Error deleting religious house:', error);
     res.status(500).json({ error: error.message || 'Internal server error' });
@@ -148,79 +149,79 @@ export const deleteReligiousHouse = async (req: Request, res: Response): Promise
 };
 
 /**
- * POST /api/religious-houses/:id/residents
- * Pushes a new resident to the residents array and updates resident_count.
+ * POST /api/admin/religious-houses/:id/residents
  */
 export const addResidentToHouse = async (req: Request, res: Response): Promise<any> => {
-  const { id } = req.params;
-  const { fullName, name, religiousName, designation, phone, email, dob, feastDay, photo, gender } = req.body;
+  const id = parseId(req.params.id);
+  if (!id) return res.status(400).json({ error: 'Valid id required' });
 
-  const residentName = fullName || name || religiousName;
-  if (!residentName) {
-    return res.status(400).json({ error: 'fullName is required.' });
+  const { name, designation, phone, email, photo } = req.body;
+  if (!name) {
+    return res.status(400).json({ error: 'Name is required for resident.' });
   }
 
   try {
-    const house = await ReligiousHouse.findById(id);
-    if (!house) {
-      return res.status(404).json({ error: 'Religious house not found.' });
-    }
+    const houseRes = await pool.query('SELECT * FROM religious_houses WHERE id = $1', [id]);
+    if (houseRes.rows.length === 0) return res.status(404).json({ error: 'Religious house not found.' });
+    const house = houseRes.rows[0];
 
-    if (!Array.isArray(house.residents)) {
-      house.residents = [];
-    }
+    const typeKey = house.category || house.category_type || 'Convent';
+    const residents: any[] = Array.isArray(house.residents) && house.residents.length > 0
+      ? house.residents
+      : (SAMPLE_RESIDENTS[typeKey] || []);
 
-    const newResident: any = {
-      fullName: residentName.trim(),
-      religiousName: (religiousName || residentName).trim(),
-      designation: (designation || 'Member').trim(),
-      phone: (phone || '').trim(),
-      email: (email || '').trim(),
-      dob: dob ? new Date(dob) : undefined,
-      feastDay: (feastDay || '').trim(),
-      photo: photo || null,
-      gender: gender || 'F',
+    const newResident = {
+      id: Date.now(),
+      name: name.trim(),
+      designation: designation ? designation.trim() : '',
+      phone: phone ? phone.trim() : '',
+      email: email ? email.trim() : '',
+      photo: photo || '',
     };
+    residents.push(newResident);
 
-    house.residents.push(newResident);
-    house.resident_count = house.residents.length;
+    const updateRes = await pool.query(
+      `UPDATE religious_houses SET residents = $1, resident_count = $2 WHERE id = $3 RETURNING *, id as _id`,
+      [JSON.stringify(residents), residents.length, id]
+    );
 
-    await house.save();
-    const updatedObj = house.toObject ? house.toObject() : house;
-    res.status(200).json(updatedObj);
+    res.status(201).json(updateRes.rows[0]);
   } catch (error: any) {
-    console.error('Error adding resident to religious house:', error);
+    console.error('Error adding resident:', error);
     res.status(500).json({ error: error.message || 'Internal server error' });
   }
 };
 
 /**
- * DELETE /api/religious-houses/:id/residents/:residentId
- * Removes a resident from the residents array and updates resident_count.
+ * DELETE /api/admin/religious-houses/:id/residents/:residentId
  */
 export const removeResidentFromHouse = async (req: Request, res: Response): Promise<any> => {
-  const { id, residentId } = req.params;
+  const id = parseId(req.params.id);
+  const { residentId } = req.params;
+  if (!id) return res.status(400).json({ error: 'Valid id required' });
 
   try {
-    const house = await ReligiousHouse.findById(id);
-    if (!house) {
-      return res.status(404).json({ error: 'Religious house not found.' });
-    }
+    const houseRes = await pool.query('SELECT * FROM religious_houses WHERE id = $1', [id]);
+    if (houseRes.rows.length === 0) return res.status(404).json({ error: 'Religious house not found.' });
+    const house = houseRes.rows[0];
 
-    if (Array.isArray(house.residents)) {
-      house.residents = house.residents.filter((r: any) => {
-        const rId = String(r._id || r.id || r.fullName || r.name);
-        return rId !== String(residentId);
-      });
-      house.resident_count = house.residents.length;
-      await house.save();
-    }
+    const typeKey = house.category || house.category_type || 'Convent';
+    const residents: any[] = Array.isArray(house.residents) && house.residents.length > 0
+      ? house.residents
+      : (SAMPLE_RESIDENTS[typeKey] || []);
 
-    const updatedObj = house.toObject ? house.toObject() : house;
-    res.status(200).json(updatedObj);
+    const filtered = residents.filter((r: any) =>
+      String(r.id || r._id || r.name) !== String(residentId) && r.name !== residentId
+    );
+
+    const updateRes = await pool.query(
+      `UPDATE religious_houses SET residents = $1, resident_count = $2 WHERE id = $3 RETURNING *, id as _id`,
+      [JSON.stringify(filtered), filtered.length, id]
+    );
+
+    res.status(200).json(updateRes.rows[0]);
   } catch (error: any) {
-    console.error('Error removing resident from religious house:', error);
+    console.error('Error removing resident:', error);
     res.status(500).json({ error: error.message || 'Internal server error' });
   }
 };
-

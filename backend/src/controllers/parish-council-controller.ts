@@ -1,34 +1,40 @@
 import { Request, Response, NextFunction } from 'express';
-import { ParishCouncil, Parishioner, Ward } from '../models';
+import { pool } from '../config/db';
+
+const parseId = (val: any): number | null => {
+  if (!val) return null;
+  const num = parseInt(String(val), 10);
+  return isNaN(num) ? null : num;
+};
 
 /**
  * GET /api/admin/parish-council
  * Retrieves all parish council seats for admin panel.
  */
-export const getAllSeatsAdmin = async (req: Request, res: Response): Promise<void> => {
+export const getAllSeatsAdmin = async (_req: Request, res: Response): Promise<void> => {
   try {
-    const seats = await ParishCouncil.find()
-      .populate('member_id')
-      .populate('ward_id')
-      .sort({ committee_type: 1, display_order: 1 });
+    const result = await pool.query(
+      `SELECT pc.*, pc.id as _id,
+              m.first_name, m.last_name, m.phone_number, m.email,
+              w.ward_name, w.ward_number
+       FROM parish_council pc
+       LEFT JOIN members m ON pc.member_id = m.id
+       LEFT JOIN wards w ON pc.ward_id = w.id
+       ORDER BY pc.committee_type ASC, pc.display_order ASC, pc.id ASC`
+    );
 
-    const mapped = seats.map((seat: any) => {
-      const sObj = seat.toObject ? seat.toObject() : seat;
-      const mem = sObj.member_id || {};
-      const ward = sObj.ward_id || {};
-
-      return {
-        id: sObj._id ? sObj._id.toString() : sObj.id,
-        member_id: mem._id ? mem._id.toString() : (mem.id || sObj.member_id),
-        role_title: sObj.role_title,
-        committee_type: sObj.committee_type,
-        ward_id: ward._id ? ward._id.toString() : (ward.id || sObj.ward_id || null),
-        display_order: sObj.display_order || 0,
-        first_name: mem.first_name || '',
-        last_name: mem.last_name || '',
-        ward_name: ward.ward_name || '',
-      };
-    });
+    const mapped = result.rows.map((row: any) => ({
+      ...row,
+      id: String(row.id),
+      _id: String(row.id),
+      member_id: row.member_id ? String(row.member_id) : null,
+      ward_id: row.ward_id ? String(row.ward_id) : null,
+      first_name: row.first_name || '',
+      last_name: row.last_name || '',
+      ward_name: row.ward_name || '',
+      occupantName: row.occupant_name || (row.first_name ? `${row.first_name} ${row.last_name || ''}`.trim() : null),
+      phone: row.phone || row.phone_number || null,
+    }));
 
     res.status(200).json(mapped);
   } catch (error: any) {
@@ -38,27 +44,16 @@ export const getAllSeatsAdmin = async (req: Request, res: Response): Promise<voi
 };
 
 /**
- * POST /api/admin/parish-council
+ * POST /api/admin/parish-council or /api/parish-council/seats
  * Creates a new parish council seat.
  */
 export const createSeat = async (req: Request, res: Response): Promise<void> => {
   const {
-    roleTitle,
-    englishTitle,
-    role_title,
-    malayalamTitle,
-    seatMl,
-    category,
-    committee_type,
-    wardNumber,
-    ward,
-    ward_id,
-    term,
-    member_id,
-    memberId,
-    occupantName,
-    phone,
-    display_order
+    roleTitle, englishTitle, role_title,
+    category, committee_type,
+    wardNumber, ward_id,
+    term, member_id, memberId,
+    occupantName, phone, display_order
   } = req.body;
 
   const finalTitle = roleTitle || englishTitle || role_title;
@@ -68,79 +63,87 @@ export const createSeat = async (req: Request, res: Response): Promise<void> => 
   }
 
   const finalCategory = category || committee_type || 'Ward Councillor';
-  const finalWardNumber = wardNumber !== undefined ? (wardNumber ? parseInt(String(wardNumber), 10) : null) : (ward !== undefined ? (ward ? parseInt(String(ward), 10) : null) : null);
+  const targetMemberId = parseId(member_id || memberId);
+  const targetWardId = parseId(ward_id || wardNumber);
 
   try {
-    const count = await ParishCouncil.countDocuments();
-    const newSeat = await ParishCouncil.create({
-      role_title: finalTitle,
-      roleTitle: finalTitle,
-      malayalamTitle: malayalamTitle || seatMl || '',
-      category: finalCategory,
-      committee_type: finalCategory,
-      wardNumber: finalWardNumber,
-      ward_id: ward_id && ward_id !== 'null' && ward_id !== '' ? ward_id : null,
-      member_id: member_id || memberId || null,
-      occupantName: occupantName || null,
-      phone: phone || null,
-      term: term || '2024 – 2026',
-      status: (member_id || memberId || occupantName) ? 'filled' : 'vacant',
-      display_order: display_order ? parseInt(String(display_order), 10) : count + 1,
-    });
+    const countRes = await pool.query('SELECT count(*)::int as count FROM parish_council');
+    const count = countRes.rows[0].count || 0;
+    const finalOrder = display_order ? parseInt(String(display_order), 10) : count + 1;
+    const finalStatus = (targetMemberId || occupantName) ? 'filled' : 'vacant';
 
-    const seats = await ParishCouncil.find().populate('member_id').populate('ward_id').sort({ display_order: 1 });
-    res.status(201).json(seats);
+    await pool.query(
+      `INSERT INTO parish_council (
+         role_title, committee_type, ward_id, member_id,
+         occupant_name, phone, term, status, display_order
+       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+      [
+        finalTitle.trim(), finalCategory.trim(), targetWardId, targetMemberId,
+        occupantName || null, phone || null, term || '2024 – 2026', finalStatus, finalOrder
+      ]
+    );
+
+    const result = await pool.query(
+      `SELECT pc.*, pc.id as _id,
+              m.first_name, m.last_name, m.phone_number, m.email,
+              w.ward_name, w.ward_number
+       FROM parish_council pc
+       LEFT JOIN members m ON pc.member_id = m.id
+       LEFT JOIN wards w ON pc.ward_id = w.id
+       ORDER BY pc.display_order ASC`
+    );
+
+    res.status(201).json(result.rows);
   } catch (error: any) {
     console.error('Error creating seat:', error);
     res.status(500).json({ error: error.message || 'Failed to create seat.' });
   }
 };
 
-
 /**
  * PUT /api/parish-council/seats/:id/assign
- * Assigns a parishioner to a seat
  */
 export const assignSeat = async (req: Request, res: Response): Promise<void> => {
-  const { id } = req.params;
+  const id = parseId(req.params.id);
   const { memberId, member_id, term, occupantName, phone } = req.body;
-  const targetMemberId = memberId || member_id;
+  const targetMemberId = parseId(memberId || member_id);
+
+  if (!id) {
+    res.status(400).json({ error: 'Valid id required' });
+    return;
+  }
 
   try {
-    let seat = await ParishCouncil.findById(id);
-    if (!seat) {
-      seat = await ParishCouncil.findOne({ role_title: { $regex: id, $options: 'i' } } as any);
-    }
-
     let pName = occupantName || null;
     let pPhone = phone || null;
-    let pWard = null;
 
-    if (targetMemberId) {
-      const member = await Parishioner.findById(targetMemberId);
-      if (member) {
-        const m = member as any;
-        pName = m.fullName || `${m.first_name || ''} ${m.last_name || ''}`.trim() || m.name;
-        pPhone = m.phone_number || m.phone;
-        pWard = m.ward_number || m.wardNumber || m.ward;
+    if (targetMemberId && (!pName || !pPhone)) {
+      const memRes = await pool.query('SELECT first_name, last_name, phone_number FROM members WHERE id = $1', [targetMemberId]);
+      if (memRes.rows.length > 0) {
+        const m = memRes.rows[0];
+        pName = pName || `${m.first_name || ''} ${m.last_name || ''}`.trim();
+        pPhone = pPhone || m.phone_number;
       }
     }
 
-    if (!seat) {
+    const result = await pool.query(
+      `UPDATE parish_council SET
+         member_id = COALESCE($1, member_id),
+         occupant_name = COALESCE($2, occupant_name),
+         phone = COALESCE($3, phone),
+         term = COALESCE($4, term),
+         status = 'filled'
+       WHERE id = $5
+       RETURNING *, id as _id`,
+      [targetMemberId, pName, pPhone, term, id]
+    );
+
+    if (result.rows.length === 0) {
       res.status(404).json({ error: 'Seat not found.' });
       return;
     }
 
-    seat.member_id = targetMemberId || seat.member_id;
-    seat.occupantName = pName || seat.occupantName;
-    seat.phone = pPhone || seat.phone;
-    if (pWard) seat.wardNumber = pWard;
-    seat.status = 'filled';
-    if (term) seat.term = term;
-
-    await seat.save();
-
-    res.status(200).json(seat);
+    res.status(200).json(result.rows[0]);
   } catch (error: any) {
     console.error('Error assigning seat:', error);
     res.status(500).json({ error: error.message || 'Failed to assign seat.' });
@@ -149,25 +152,32 @@ export const assignSeat = async (req: Request, res: Response): Promise<void> => 
 
 /**
  * PUT /api/parish-council/seats/:id/vacate
- * Vacates a seat
  */
 export const vacateSeat = async (req: Request, res: Response): Promise<void> => {
-  const { id } = req.params;
+  const id = parseId(req.params.id);
+  if (!id) {
+    res.status(400).json({ error: 'Valid id required' });
+    return;
+  }
+
   try {
-    const seat = await ParishCouncil.findById(id);
-    if (!seat) {
+    const result = await pool.query(
+      `UPDATE parish_council SET
+         member_id = NULL,
+         occupant_name = NULL,
+         phone = NULL,
+         status = 'vacant'
+       WHERE id = $1
+       RETURNING *, id as _id`,
+      [id]
+    );
+
+    if (result.rows.length === 0) {
       res.status(404).json({ error: 'Seat not found.' });
       return;
     }
 
-    seat.member_id = null;
-    seat.occupantName = null;
-    seat.phone = null;
-    seat.status = 'vacant';
-
-    await seat.save();
-
-    res.status(200).json(seat);
+    res.status(200).json(result.rows[0]);
   } catch (error: any) {
     console.error('Error vacating seat:', error);
     res.status(500).json({ error: error.message || 'Failed to vacate seat.' });
@@ -176,61 +186,61 @@ export const vacateSeat = async (req: Request, res: Response): Promise<void> => 
 
 /**
  * PUT /api/admin/parish-council/:id or /api/parish-council/seats/:id
- * Updates an existing parish council seat.
  */
 export const updateSeat = async (req: Request, res: Response): Promise<void> => {
-  const { id } = req.params;
-  const { member_id, memberId, role_title, roleTitle, committee_type, category, ward_id, wardNumber, term, occupantName, phone, status } = req.body;
+  const id = parseId(req.params.id);
+  if (!id) {
+    res.status(400).json({ error: 'Valid id required' });
+    return;
+  }
+
+  const { member_id, memberId, role_title, roleTitle, committee_type, category, ward_id, term, occupantName, phone, status } = req.body;
+  const targetMemberId = parseId(member_id || memberId);
+  const title = role_title || roleTitle;
+  const cat = committee_type || category;
+  const targetWardId = parseId(ward_id);
+
   try {
-    const targetMemberId = member_id || memberId;
-    let pName = occupantName;
-    let pPhone = phone;
-
-    if (targetMemberId && !pName) {
-      const member = await Parishioner.findById(targetMemberId);
-      if (member) {
-        const m = member as any;
-        pName = m.fullName || `${m.first_name || ''} ${m.last_name || ''}`.trim() || m.name;
-        pPhone = m.phone_number || m.phone;
-      }
-    }
-
-    const updated = await ParishCouncil.findByIdAndUpdate(
-      id,
-      {
-        ...(targetMemberId !== undefined && { member_id: targetMemberId }),
-        ...(role_title || roleTitle ? { role_title: role_title || roleTitle, roleTitle: role_title || roleTitle } : {}),
-        ...(committee_type || category ? { committee_type: committee_type || category, category: committee_type || category } : {}),
-        ...(ward_id !== undefined && { ward_id: ward_id && ward_id !== 'null' && ward_id !== '' ? ward_id : null }),
-        ...(wardNumber !== undefined && { wardNumber }),
-        ...(term !== undefined && { term }),
-        ...(pName !== undefined && { occupantName: pName }),
-        ...(pPhone !== undefined && { phone: pPhone }),
-        ...(status !== undefined && { status }),
-      },
-      { new: true }
+    const result = await pool.query(
+      `UPDATE parish_council SET
+         member_id = COALESCE($1, member_id),
+         role_title = COALESCE($2, role_title),
+         committee_type = COALESCE($3, committee_type),
+         ward_id = COALESCE($4, ward_id),
+         term = COALESCE($5, term),
+         occupant_name = COALESCE($6, occupant_name),
+         phone = COALESCE($7, phone),
+         status = COALESCE($8, status)
+       WHERE id = $9
+       RETURNING *, id as _id`,
+      [targetMemberId, title, cat, targetWardId, term, occupantName, phone, status, id]
     );
-    if (!updated) {
+
+    if (result.rows.length === 0) {
       res.status(404).json({ error: 'Seat not found.' });
       return;
     }
-    res.status(200).json(updated);
+
+    res.status(200).json(result.rows[0]);
   } catch (error: any) {
     console.error('Error updating seat:', error);
     res.status(500).json({ error: error.message || 'Failed to update seat.' });
   }
 };
 
-
 /**
  * DELETE /api/admin/parish-council/:id
- * Deletes a parish council seat.
  */
 export const deleteSeat = async (req: Request, res: Response): Promise<void> => {
-  const { id } = req.params;
+  const id = parseId(req.params.id);
+  if (!id) {
+    res.status(400).json({ error: 'Valid id required' });
+    return;
+  }
+
   try {
-    const deleted = await ParishCouncil.findByIdAndDelete(id);
-    if (!deleted) {
+    const result = await pool.query('DELETE FROM parish_council WHERE id = $1 RETURNING id', [id]);
+    if (result.rows.length === 0) {
       res.status(404).json({ error: 'Seat not found.' });
       return;
     }
@@ -243,27 +253,24 @@ export const deleteSeat = async (req: Request, res: Response): Promise<void> => 
 
 /**
  * GET /api/directory/quick-contacts
- * Public directory search for Vicar, Assistant Vicar, and Parish Secretary.
  */
-export const getQuickContacts = async (req: Request, res: Response): Promise<void> => {
+export const getQuickContacts = async (_req: Request, res: Response): Promise<void> => {
   try {
-    const seats = await ParishCouncil.find({
-      role_title: { $in: ['Vicar', 'Assistant Vicar', 'Parish Secretary'] },
-    }).populate('member_id').sort({ display_order: 1 });
+    const result = await pool.query(
+      `SELECT pc.role_title,
+              COALESCE(pc.occupant_name, CONCAT(m.first_name, ' ', m.last_name)) as name,
+              COALESCE(pc.phone, m.phone_number) as phone_number,
+              m.email
+       FROM parish_council pc
+       LEFT JOIN members m ON pc.member_id = m.id
+       WHERE pc.role_title IN ('Vicar', 'Assistant Vicar', 'Parish Secretary')
+       ORDER BY pc.display_order ASC`
+    );
 
-    const contacts = seats.map((seat: any) => {
-      const mem = seat.member_id || {};
-      return {
-        role_title: seat.role_title,
-        name: `${mem.first_name || ''} ${mem.last_name || ''}`.trim(),
-        phone_number: mem.phone_number || null,
-        email: mem.email || null,
-      };
-    });
-
+    const contacts = result.rows;
     const roles = ['Vicar', 'Assistant Vicar', 'Parish Secretary'];
     const finalContacts = roles.map(role => {
-      const found = contacts.find(c => c.role_title === role);
+      const found = contacts.find((c: any) => c.role_title === role);
       if (found && found.phone_number && found.phone_number.trim() !== '') return found;
 
       if (role === 'Vicar') {
@@ -299,34 +306,34 @@ export const getQuickContacts = async (req: Request, res: Response): Promise<voi
 
 /**
  * GET /api/directory/parish-council
- * Public directory listing of all seats.
  */
-export const getParishCouncilDirectory = async (req: Request, res: Response): Promise<void> => {
+export const getParishCouncilDirectory = async (_req: Request, res: Response): Promise<void> => {
   try {
-    const seats = await ParishCouncil.find()
-      .populate('member_id')
-      .populate('ward_id')
-      .sort({ committee_type: 1, display_order: 1 });
+    const result = await pool.query(
+      `SELECT pc.*, pc.id as _id,
+              m.first_name, m.last_name, m.phone_number, m.email,
+              w.ward_name
+       FROM parish_council pc
+       LEFT JOIN members m ON pc.member_id = m.id
+       LEFT JOIN wards w ON pc.ward_id = w.id
+       ORDER BY pc.committee_type ASC, pc.display_order ASC`
+    );
 
-    const mapped = seats.map((seat: any) => {
-      const sObj = seat.toObject ? seat.toObject() : seat;
-      const mem = sObj.member_id || {};
-      const ward = sObj.ward_id || {};
-
-      return {
-        id: sObj._id ? sObj._id.toString() : sObj.id,
-        role_title: sObj.role_title,
-        committee_type: sObj.committee_type,
-        ward_id: ward._id ? ward._id.toString() : (ward.id || sObj.ward_id || null),
-        display_order: sObj.display_order || 0,
-        member_id: mem._id ? mem._id.toString() : (mem.id || sObj.member_id),
-        first_name: mem.first_name || '',
-        last_name: mem.last_name || '',
-        phone_number: mem.phone_number || null,
-        email: mem.email || null,
-        ward_name: ward.ward_name || '',
-      };
-    });
+    const mapped = result.rows.map((row: any) => ({
+      ...row,
+      id: String(row.id),
+      _id: String(row.id),
+      role_title: row.role_title,
+      committee_type: row.committee_type,
+      ward_id: row.ward_id ? String(row.ward_id) : null,
+      display_order: row.display_order || 0,
+      member_id: row.member_id ? String(row.member_id) : null,
+      first_name: row.first_name || '',
+      last_name: row.last_name || '',
+      phone_number: row.phone_number || row.phone || null,
+      email: row.email || null,
+      ward_name: row.ward_name || '',
+    }));
 
     res.status(200).json(mapped);
   } catch (error: any) {

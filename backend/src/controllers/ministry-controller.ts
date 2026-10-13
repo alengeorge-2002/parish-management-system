@@ -1,49 +1,34 @@
 import { Request, Response, NextFunction } from 'express';
-import { Organization, Parishioner } from '../models';
+import { pool } from '../config/db';
+
+const parseId = (val: any): number | null => {
+  if (!val) return null;
+  const num = parseInt(String(val), 10);
+  return isNaN(num) ? null : num;
+};
 
 /**
  * Public directory: Fetches all ministries with their aggregated counts and members
  */
-export const getMinistriesDirectory = async (req: Request, res: Response) => {
+export const getMinistriesDirectory = async (_req: Request, res: Response) => {
   try {
-    const ministries = await Organization.find({ category: 'ministry' })
-      .populate({
-        path: 'members.parishioner',
-        model: 'Parishioner',
-      })
-      .populate({
-        path: 'members.member_id',
-        model: 'Parishioner',
-      })
-      .sort({ title: 1, name_en: 1 });
+    const result = await pool.query(
+      `SELECT *, id as _id FROM organizations WHERE category = 'ministry' ORDER BY title ASC, name_en ASC`
+    );
 
-    const result = ministries.map((m: any) => {
-      const mObj = m.toObject ? m.toObject() : m;
-      const members = (mObj.members || []).map((mem: any) => {
-        const p = mem.parishioner || mem.member_id || {};
-        return {
-          assignment_id: mem._id ? mem._id.toString() : mem.id,
-          ministry_id: mObj._id ? mObj._id.toString() : mObj.id,
-          role_title: mem.role_title || mem.role || 'Member',
-          display_order: mem.display_order || 0,
-          member_id: p._id ? p._id.toString() : (p.id || null),
-          first_name: p.first_name || '',
-          last_name: p.last_name || '',
-          phone_number: p.phone_number || null,
-          email: p.email || null,
-        };
-      });
-
+    const mapped = result.rows.map((mObj: any) => {
+      const members = Array.isArray(mObj.members) ? mObj.members : [];
       return {
         ...mObj,
-        id: mObj._id ? mObj._id.toString() : mObj.id,
+        id: String(mObj.id),
+        _id: String(mObj.id),
         title: mObj.title || mObj.name_en || '',
         member_count: members.length,
         members,
       };
     });
 
-    res.json(result);
+    res.json(mapped);
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }
@@ -52,10 +37,17 @@ export const getMinistriesDirectory = async (req: Request, res: Response) => {
 /**
  * Admin: Get all ministries
  */
-export const getAllMinistriesAdmin = async (req: Request, res: Response) => {
+export const getAllMinistriesAdmin = async (_req: Request, res: Response) => {
   try {
-    const list = await Organization.find({ category: 'ministry' }).sort({ title: 1, name_en: 1 });
-    res.json(list);
+    const result = await pool.query(
+      `SELECT *, id as _id FROM organizations WHERE category = 'ministry' ORDER BY title ASC, name_en ASC`
+    );
+    const mapped = result.rows.map((row: any) => ({
+      ...row,
+      id: String(row.id),
+      _id: String(row.id),
+    }));
+    res.json(mapped);
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }
@@ -71,15 +63,14 @@ export const createMinistry = async (req: Request, res: Response): Promise<any> 
     return res.status(400).json({ error: 'Title is required' });
   }
   try {
-    const ministry = await Organization.create({
-      category: 'ministry',
-      title: ministryTitle,
-      name_en: ministryTitle,
-      description: description || null,
-      icon_symbol: icon_symbol || null,
-      members: [],
-    });
-    res.status(201).json(ministry);
+    const result = await pool.query(
+      `INSERT INTO organizations (category, title, name_en, description, icon_symbol, members)
+       VALUES ('ministry', $1, $1, $2, $3, '[]'::jsonb)
+       RETURNING *, id as _id`,
+      [ministryTitle.trim(), description || null, icon_symbol || null]
+    );
+    const row = result.rows[0];
+    res.status(201).json({ ...row, id: String(row.id), _id: String(row.id) });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }
@@ -89,27 +80,27 @@ export const createMinistry = async (req: Request, res: Response): Promise<any> 
  * Admin: Update a ministry
  */
 export const updateMinistry = async (req: Request, res: Response): Promise<any> => {
-  const { id } = req.params;
+  const id = parseId(req.params.id);
+  if (!id) return res.status(400).json({ error: 'Valid id required' });
+
   const { title, name_en, description, icon_symbol } = req.body;
   const ministryTitle = title || name_en;
   if (!ministryTitle) {
     return res.status(400).json({ error: 'Title is required' });
   }
   try {
-    const updated = await Organization.findByIdAndUpdate(
-      id,
-      {
-        title: ministryTitle,
-        name_en: ministryTitle,
-        description: description || null,
-        icon_symbol: icon_symbol || null,
-      },
-      { new: true }
+    const result = await pool.query(
+      `UPDATE organizations SET
+         title = $1, name_en = $1, description = $2, icon_symbol = $3
+       WHERE id = $4
+       RETURNING *, id as _id`,
+      [ministryTitle.trim(), description || null, icon_symbol || null, id]
     );
-    if (!updated) {
+    if (result.rows.length === 0) {
       return res.status(404).json({ error: 'Ministry not found' });
     }
-    res.json(updated);
+    const row = result.rows[0];
+    res.json({ ...row, id: String(row.id), _id: String(row.id) });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }
@@ -119,13 +110,15 @@ export const updateMinistry = async (req: Request, res: Response): Promise<any> 
  * Admin: Delete a ministry
  */
 export const deleteMinistry = async (req: Request, res: Response): Promise<any> => {
-  const { id } = req.params;
+  const id = parseId(req.params.id);
+  if (!id) return res.status(400).json({ error: 'Valid id required' });
+
   try {
-    const deleted = await Organization.findByIdAndDelete(id);
-    if (!deleted) {
+    const result = await pool.query('DELETE FROM organizations WHERE id = $1 RETURNING *', [id]);
+    if (result.rows.length === 0) {
       return res.status(404).json({ error: 'Ministry not found' });
     }
-    res.json({ message: 'Ministry deleted successfully', deleted });
+    res.json({ message: 'Ministry deleted successfully', deleted: result.rows[0] });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }
@@ -134,25 +127,25 @@ export const deleteMinistry = async (req: Request, res: Response): Promise<any> 
 /**
  * Admin: Get all ministry memberships
  */
-export const getMinistryMembersAdmin = async (req: Request, res: Response) => {
+export const getMinistryMembersAdmin = async (_req: Request, res: Response) => {
   try {
-    const ministries = await Organization.find({ category: 'ministry' })
-      .populate({ path: 'members.parishioner' })
-      .populate({ path: 'members.member_id' });
+    const result = await pool.query(
+      `SELECT id, title, name_en, members FROM organizations WHERE category = 'ministry'`
+    );
 
     const allMembers: any[] = [];
-    ministries.forEach((m: any) => {
-      const mObj = m.toObject ? m.toObject() : m;
-      (mObj.members || []).forEach((mem: any) => {
-        const p = mem.parishioner || mem.member_id || {};
+    result.rows.forEach((mObj: any) => {
+      const members = Array.isArray(mObj.members) ? mObj.members : [];
+      members.forEach((mem: any) => {
         allMembers.push({
-          id: mem._id ? mem._id.toString() : mem.id,
-          ministry_id: mObj._id ? mObj._id.toString() : mObj.id,
-          member_id: p._id ? p._id.toString() : (p.id || null),
+          id: String(mem.id || mem.assignment_id || mem._id || Math.random()),
+          assignment_id: String(mem.id || mem.assignment_id || mem._id),
+          ministry_id: String(mObj.id),
+          member_id: mem.member_id ? String(mem.member_id) : null,
           role_title: mem.role_title || mem.role || 'Member',
           display_order: mem.display_order || 0,
-          first_name: p.first_name || '',
-          last_name: p.last_name || '',
+          first_name: mem.first_name || '',
+          last_name: mem.last_name || '',
           ministry_title: mObj.title || mObj.name_en || '',
         });
       });
@@ -169,27 +162,35 @@ export const getMinistryMembersAdmin = async (req: Request, res: Response) => {
  */
 export const createMinistryMember = async (req: Request, res: Response): Promise<any> => {
   const { ministry_id, member_id, role_title, display_order } = req.body;
-  if (!ministry_id || !member_id || !role_title) {
+  const mId = parseId(ministry_id);
+  if (!mId || !member_id || !role_title) {
     return res.status(400).json({ error: 'ministry_id, member_id, and role_title are required' });
   }
   try {
-    const ministry = await Organization.findById(ministry_id);
-    if (!ministry) {
-      return res.status(404).json({ error: 'Ministry not found' });
-    }
+    const memRes = await pool.query('SELECT first_name, last_name, phone_number, email FROM members WHERE id = $1', [parseId(member_id)]);
+    const memRow = memRes.rows[0] || {};
 
     const newMember = {
-      parishioner: member_id,
-      member_id: member_id,
+      id: Date.now(),
+      assignment_id: Date.now(),
+      member_id: parseId(member_id),
+      role_title,
       role: role_title,
-      role_title: role_title,
       display_order: display_order || 0,
+      first_name: memRow.first_name || '',
+      last_name: memRow.last_name || '',
+      phone_number: memRow.phone_number || null,
+      email: memRow.email || null,
     };
 
-    ministry.members.push(newMember as any);
-    await ministry.save();
+    await pool.query(
+      `UPDATE organizations
+       SET members = COALESCE(members, '[]'::jsonb) || $1::jsonb
+       WHERE id = $2`,
+      [JSON.stringify([newMember]), mId]
+    );
 
-    res.status(201).json(ministry.members[ministry.members.length - 1]);
+    res.status(201).json(newMember);
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }
@@ -200,27 +201,26 @@ export const createMinistryMember = async (req: Request, res: Response): Promise
  */
 export const updateMinistryMember = async (req: Request, res: Response): Promise<any> => {
   const { id } = req.params;
-  const { role_title, display_order, ministry_id, member_id } = req.body;
-  if (!role_title) {
-    return res.status(400).json({ error: 'role_title is required' });
-  }
+  const { role_title, display_order } = req.body;
   try {
-    const ministry = await Organization.findOne({ 'members._id': id });
-    if (!ministry) {
-      return res.status(404).json({ error: 'Membership not found' });
-    }
+    const result = await pool.query(
+      `SELECT id, members FROM organizations WHERE category = 'ministry'`
+    );
 
-    const memItem = ministry.members.find((m: any) => m._id.toString() === id);
-    if (memItem) {
-      memItem.role = role_title;
-      memItem.role_title = role_title;
-      if (display_order !== undefined) memItem.display_order = display_order;
-      if (member_id) {
-        memItem.parishioner = member_id as any;
-        memItem.member_id = member_id as any;
+    for (const org of result.rows) {
+      const members = Array.isArray(org.members) ? org.members : [];
+      const idx = members.findIndex((m: any) => String(m.id || m.assignment_id || m._id) === String(id));
+      if (idx !== -1) {
+        if (role_title) {
+          members[idx].role_title = role_title;
+          members[idx].role = role_title;
+        }
+        if (display_order !== undefined) {
+          members[idx].display_order = display_order;
+        }
+        await pool.query('UPDATE organizations SET members = $1 WHERE id = $2', [JSON.stringify(members), org.id]);
+        return res.json(members[idx]);
       }
-      await ministry.save();
-      return res.json(memItem);
     }
 
     res.status(404).json({ error: 'Membership not found' });
@@ -235,55 +235,65 @@ export const updateMinistryMember = async (req: Request, res: Response): Promise
 export const deleteMinistryMember = async (req: Request, res: Response): Promise<any> => {
   const { id } = req.params;
   try {
-    const ministry = await Organization.findOne({ 'members._id': id });
-    if (!ministry) {
-      return res.status(404).json({ error: 'Membership not found' });
+    const result = await pool.query(
+      `SELECT id, members FROM organizations WHERE category = 'ministry'`
+    );
+
+    for (const org of result.rows) {
+      const members = Array.isArray(org.members) ? org.members : [];
+      const filtered = members.filter((m: any) => String(m.id || m.assignment_id || m._id) !== String(id));
+      if (filtered.length !== members.length) {
+        await pool.query('UPDATE organizations SET members = $1 WHERE id = $2', [JSON.stringify(filtered), org.id]);
+        return res.json({ message: 'Membership deleted successfully' });
+      }
     }
 
-    ministry.members = ministry.members.filter((m: any) => m._id.toString() !== id) as any;
-    await ministry.save();
-
-    res.json({ message: 'Membership deleted successfully' });
+    res.status(404).json({ error: 'Membership not found' });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }
 };
 
 /**
- * Route: POST /api/ministries/:id/members or /api/admin/ministries/:id/members
+ * Route: POST /api/ministries/:id/members
  */
 export const addMemberToMinistry = async (req: Request, res: Response): Promise<any> => {
-  const { id } = req.params;
+  const mId = parseId(req.params.id);
   const { memberId, member_id, role, role_title } = req.body;
-  const targetMemberId = memberId || member_id;
+  const targetMemberId = parseId(memberId || member_id);
   const targetRole = role || role_title || 'Member';
 
-  if (!targetMemberId) {
-    return res.status(400).json({ error: 'memberId is required' });
+  if (!mId || !targetMemberId) {
+    return res.status(400).json({ error: 'valid ministry id and memberId are required' });
   }
 
   try {
-    const ministry = await Organization.findById(id);
-    if (!ministry) {
-      return res.status(404).json({ error: 'Ministry not found' });
-    }
+    const memRes = await pool.query('SELECT first_name, last_name, phone_number, email FROM members WHERE id = $1', [targetMemberId]);
+    const memRow = memRes.rows[0] || {};
 
     const newMember = {
-      parishioner: targetMemberId,
+      id: Date.now(),
+      assignment_id: Date.now(),
       member_id: targetMemberId,
       role: targetRole,
       role_title: targetRole,
-      display_order: ministry.members.length + 1,
+      first_name: memRow.first_name || '',
+      last_name: memRow.last_name || '',
+      phone_number: memRow.phone_number || null,
+      email: memRow.email || null,
+      display_order: 1,
     };
 
-    ministry.members.push(newMember as any);
-    await ministry.save();
+    const updateRes = await pool.query(
+      `UPDATE organizations
+       SET members = COALESCE(members, '[]'::jsonb) || $1::jsonb
+       WHERE id = $2
+       RETURNING *, id as _id`,
+      [JSON.stringify([newMember]), mId]
+    );
 
-    const updatedMinistry = await Organization.findById(id)
-      .populate({ path: 'members.parishioner' })
-      .populate({ path: 'members.member_id' });
-
-    res.status(201).json(updatedMinistry);
+    if (updateRes.rows.length === 0) return res.status(404).json({ error: 'Ministry not found' });
+    res.status(201).json(updateRes.rows[0]);
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }
@@ -293,27 +303,26 @@ export const addMemberToMinistry = async (req: Request, res: Response): Promise<
  * Route: DELETE /api/ministries/:id/members/:memberId
  */
 export const removeMemberFromMinistry = async (req: Request, res: Response): Promise<any> => {
-  const { id, memberId } = req.params;
+  const mId = parseId(req.params.id);
+  const targetId = req.params.memberId;
+  if (!mId) return res.status(400).json({ error: 'Valid id required' });
+
   try {
-    const ministry = await Organization.findById(id);
-    if (!ministry) {
-      return res.status(404).json({ error: 'Ministry not found' });
-    }
+    const orgRes = await pool.query('SELECT members FROM organizations WHERE id = $1', [mId]);
+    if (orgRes.rows.length === 0) return res.status(404).json({ error: 'Ministry not found' });
 
-    ministry.members = ministry.members.filter((m: any) => {
-      const pId = m.parishioner ? m.parishioner.toString() : (m.member_id ? m.member_id.toString() : (m._id ? m._id.toString() : ''));
-      return pId !== memberId && m._id?.toString() !== memberId;
-    }) as any;
+    const members = Array.isArray(orgRes.rows[0].members) ? orgRes.rows[0].members : [];
+    const filtered = members.filter((m: any) =>
+      String(m.id || m.assignment_id || m.member_id) !== String(targetId)
+    );
 
-    await ministry.save();
+    const updateRes = await pool.query(
+      'UPDATE organizations SET members = $1 WHERE id = $2 RETURNING *, id as _id',
+      [JSON.stringify(filtered), mId]
+    );
 
-    const updatedMinistry = await Organization.findById(id)
-      .populate({ path: 'members.parishioner' })
-      .populate({ path: 'members.member_id' });
-
-    res.json(updatedMinistry);
+    res.json(updateRes.rows[0]);
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }
 };
-

@@ -1,45 +1,53 @@
 CREATE TABLE IF NOT EXISTS wards (
     id SERIAL PRIMARY KEY,
     ward_name VARCHAR(100) UNIQUE NOT NULL,
+    ward_number INTEGER,
+    ward_prefix VARCHAR(50) DEFAULT 'W',
+    total_units INT DEFAULT 0,
+    representative_name VARCHAR(150),
+    contact_phone VARCHAR(50),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
-INSERT INTO wards (ward_name) VALUES 
-('St. Jude Ward'),
-('St. Mary Ward'),
-('St. Joseph Ward')
-ON CONFLICT DO NOTHING;
+INSERT INTO wards (ward_name, ward_number, total_units, representative_name, contact_phone) VALUES 
+('St. Jude Ward', 1, 4, 'Varghese Mathew', '+91 94471 00001'),
+('St. Mary Ward', 2, 3, 'Joseph Kuriakose', '+91 94471 00002'),
+('St. Joseph Ward', 3, 5, 'Thomas George', '+91 94471 00003')
+ON CONFLICT (ward_name) DO NOTHING;
 
 CREATE TABLE IF NOT EXISTS units (
     id SERIAL PRIMARY KEY,
-    unit_number INTEGER NOT NULL,
-    ward_id INT NOT NULL REFERENCES wards(id) ON DELETE RESTRICT,
+    unit_number VARCHAR(50) NOT NULL,
+    unit_name VARCHAR(150),
+    representative_name VARCHAR(150),
+    representative_phone VARCHAR(50),
+    ward_id INT NOT NULL REFERENCES wards(id) ON DELETE CASCADE,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
 INSERT INTO units (unit_number, ward_id) VALUES 
-(101, 1),
-(202, 2),
-(5, 3)
+('101', 1),
+('202', 2),
+('5', 3)
 ON CONFLICT DO NOTHING;
 
 CREATE TABLE IF NOT EXISTS families (
     id SERIAL PRIMARY KEY,
     family_name VARCHAR(150) NOT NULL,
     head_of_family VARCHAR(150),
-    ward_id INT NOT NULL REFERENCES wards(id) ON DELETE RESTRICT,
+    ward_id INT REFERENCES wards(id) ON DELETE RESTRICT,
     unit_number VARCHAR(50) NOT NULL,
     house_name VARCHAR(150) NOT NULL,
     home_address TEXT NOT NULL,
-    family_photo_url TEXT NOT NULL,
-    contact_number VARCHAR(20),
+    family_photo_url TEXT,
+    contact_number VARCHAR(50),
     unit_id INT REFERENCES units(id) ON DELETE SET NULL,
     reg_no VARCHAR(50) NULL,
     email VARCHAR(150) NULL,
+    family_code VARCHAR(50) NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
--- Insert families linking to the seeded wards & units
 INSERT INTO families (family_name, head_of_family, ward_id, unit_number, house_name, home_address, family_photo_url, contact_number, unit_id, reg_no, email) VALUES 
 ('Smith Family', 'John Smith', 1, 'A-101', 'Smith Villa', '123 Main St, Springfield', 'https://example.com/photos/smith.jpg', '555-1234', 1, 'REG-001', 'smith@example.com'),
 ('Doe Family', 'Jane Doe', 2, 'B-202', 'Doe Residence', '456 Oak Ave, Springfield', 'https://example.com/photos/doe.jpg', '555-5678', 2, 'REG-002', 'doe@example.com'),
@@ -51,7 +59,7 @@ CREATE TABLE IF NOT EXISTS members (
     family_id INT NOT NULL REFERENCES families(id) ON DELETE CASCADE,
     first_name VARCHAR(100) NOT NULL,
     last_name VARCHAR(100) NOT NULL,
-    phone_number VARCHAR(20),
+    phone_number VARCHAR(50),
     email VARCHAR(150),
     relationship_role VARCHAR(50) NOT NULL,
     is_head_of_household BOOLEAN DEFAULT false,
@@ -59,10 +67,14 @@ CREATE TABLE IF NOT EXISTS members (
     dom DATE NULL,
     occupation VARCHAR(150) NULL,
     blood_group VARCHAR(20) NULL,
+    malayalam_name VARCHAR(150) NULL,
+    baptism_name VARCHAR(150) NULL,
+    gender VARCHAR(20) DEFAULT 'MALE',
+    status VARCHAR(50) DEFAULT 'active',
+    sacraments TEXT[] DEFAULT '{}',
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
--- Insert members linking to the seeded families
 INSERT INTO members (family_id, first_name, last_name, phone_number, email, relationship_role, is_head_of_household, dob, dom, occupation, blood_group) VALUES 
 (1, 'John', 'Smith', '555-1234', 'john.smith@example.com', 'Husband', true, '1980-01-01', '2005-05-05', 'Engineer', 'A+'),
 (1, 'Mary', 'Smith', '555-5678', 'mary.smith@example.com', 'Wife', false, '1982-02-02', '2005-05-05', 'Teacher', 'B+'),
@@ -84,7 +96,6 @@ CREATE TABLE IF NOT EXISTS app_users (
 
 CREATE INDEX IF NOT EXISTS idx_app_users_access_key ON app_users(access_key);
 
--- Insert sample app users for the seeded members
 INSERT INTO app_users (member_id, access_key, role) VALUES 
 (1, 'access_key_admin_123', 'admin'),
 (2, 'access_key_user_456', 'parishioner'),
@@ -97,7 +108,10 @@ CREATE TABLE IF NOT EXISTS announcements (
     title VARCHAR(255) NOT NULL,
     content TEXT NOT NULL,
     image_url TEXT,
+    poster_url TEXT,
     priority VARCHAR(50) DEFAULT 'medium',
+    is_active BOOLEAN DEFAULT true,
+    expiry_date TIMESTAMP,
     announcement_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
@@ -110,46 +124,6 @@ ON CONFLICT DO NOTHING;
 
 CREATE TABLE IF NOT EXISTS clergy_directory (
     id SERIAL PRIMARY KEY,
-    name VARCHAR(255) UNIQUE NOT NULL,
-    role_type VARCHAR(100) NOT NULL,
-    designation VARCHAR(255),
-    address TEXT,
-    email VARCHAR(255),
-    phone_number VARCHAR(100),
-    blood_group VARCHAR(50),
-    avatar_url VARCHAR(255)
-);
-
-INSERT INTO clergy_directory (name, role_type, designation, address, email, phone_number, blood_group, avatar_url) VALUES
-('Rev. Fr. Joseph Mathew', 'parish-priest', 'Vicar', NULL, 'pp.stjosephdevagiri@gmail.com', '+91 98450 00001', 'O+', NULL),
-('Rev. Fr. George Varghese', 'parish-priest', 'Associate Pastor', NULL, 'assoc.stjosephdevagiri@gmail.com', '+91 98450 00002', 'O+', NULL),
-('Sr. Anitha Thomas', 'sister', 'School Principal', 'CMC', NULL, '+91 98450 00003', 'O+', NULL),
-('Sr. Mary Joseph', 'sister', 'Social Service Wing', 'CMI', NULL, '+91 98450 00004', 'O+', NULL)
-ON CONFLICT (name) DO NOTHING;
-
-
-CREATE TABLE IF NOT EXISTS clergy_directory (
-    id SERIAL PRIMARY KEY,
-    name VARCHAR(255) UNIQUE NOT NULL,
-    role_type VARCHAR(100) NOT NULL,
-    designation VARCHAR(255),
-    address TEXT,
-    email VARCHAR(255),
-    phone_number VARCHAR(100),
-    blood_group VARCHAR(50),
-    avatar_url VARCHAR(255)
-);
-
-INSERT INTO clergy_directory (name, role_type, designation, address, email, phone_number, blood_group, avatar_url) VALUES
-('Rev. Fr. Joseph Mathew', 'parish-priest', 'Vicar', NULL, 'pp.stjosephdevagiri@gmail.com', '+91 98450 00001', 'O+', NULL),
-('Rev. Fr. George Varghese', 'parish-priest', 'Associate Pastor', NULL, 'assoc.stjosephdevagiri@gmail.com', '+91 98450 00002', 'O+', NULL),
-('Sr. Anitha Thomas', 'sister', 'School Principal', 'CMC', NULL, '+91 98450 00003', 'O+', NULL),
-('Sr. Mary Joseph', 'sister', 'Social Service Wing', 'CMI', NULL, '+91 98450 00004', 'O+', NULL)
-ON CONFLICT (name) DO NOTHING;
-
-
-CREATE TABLE IF NOT EXISTS clergy_directory (
-    id SERIAL PRIMARY KEY,
     name VARCHAR(255) NOT NULL,
     role_type VARCHAR(100) NOT NULL,
     designation VARCHAR(255),
@@ -157,12 +131,96 @@ CREATE TABLE IF NOT EXISTS clergy_directory (
     email VARCHAR(255),
     phone_number VARCHAR(100),
     blood_group VARCHAR(50),
-    avatar_url VARCHAR(255)
+    avatar_url VARCHAR(255),
+    display_order INT DEFAULT 0,
+    is_quick_contact BOOLEAN DEFAULT false,
+    house_id INT
 );
 
-INSERT INTO clergy_directory (name, role_type, designation, address, email, phone_number, blood_group, avatar_url) VALUES
-('Rev. Fr. Joseph Mathew', 'parish-priest', 'Vicar', NULL, 'pp.stjosephdevagiri@gmail.com', '+91 98450 00001', 'O+', NULL),
-('Rev. Fr. George Varghese', 'parish-priest', 'Associate Pastor', NULL, 'assoc.stjosephdevagiri@gmail.com', '+91 98450 00002', 'O+', NULL),
-('Sr. Anitha Thomas', 'sister', 'School Principal', 'CMC', NULL, '+91 98450 00003', 'O+', NULL),
-('Sr. Mary Joseph', 'sister', 'Social Service Wing', 'CMI', NULL, '+91 98450 00004', 'O+', NULL)
+INSERT INTO clergy_directory (name, role_type, designation, address, email, phone_number, blood_group, avatar_url, display_order) VALUES
+('Rev. Fr. Joseph Mathew', 'parish-priest', 'Vicar', NULL, 'pp.stjosephdevagiri@gmail.com', '+91 98450 00001', 'O+', NULL, 1),
+('Rev. Fr. George Varghese', 'parish-priest', 'Associate Pastor', NULL, 'assoc.stjosephdevagiri@gmail.com', '+91 98450 00002', 'O+', NULL, 2),
+('Sr. Anitha Thomas', 'sister', 'School Principal', 'CMC', NULL, '+91 98450 00003', 'O+', NULL, 3),
+('Sr. Mary Joseph', 'sister', 'Social Service Wing', 'CMI', NULL, '+91 98450 00004', 'O+', NULL, 4)
 ON CONFLICT DO NOTHING;
+
+CREATE TABLE IF NOT EXISTS events (
+    id SERIAL PRIMARY KEY,
+    title VARCHAR(255) NOT NULL,
+    title_en VARCHAR(255),
+    title_ml VARCHAR(255),
+    event_date VARCHAR(50),
+    target_date VARCHAR(50),
+    mass_time VARCHAR(100),
+    type_badge VARCHAR(50),
+    location VARCHAR(255) DEFAULT 'Main Sanctuary',
+    description TEXT,
+    description_en TEXT,
+    description_ml TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS religious_houses (
+    id SERIAL PRIMARY KEY,
+    name VARCHAR(255) NOT NULL,
+    category_type VARCHAR(100) DEFAULT 'Convent',
+    category VARCHAR(100) DEFAULT 'Convent',
+    superior_in_charge VARCHAR(255),
+    resident_count INT DEFAULT 0,
+    contact_number VARCHAR(100),
+    email VARCHAR(255),
+    address TEXT,
+    photo_url TEXT,
+    residents JSONB DEFAULT '[]'::jsonb,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS organizations (
+    id SERIAL PRIMARY KEY,
+    title VARCHAR(255),
+    name_en VARCHAR(255),
+    name_ml VARCHAR(255),
+    category VARCHAR(100) DEFAULT 'ministry',
+    description TEXT,
+    icon_symbol VARCHAR(100),
+    members JSONB DEFAULT '[]'::jsonb,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS parish_council (
+    id SERIAL PRIMARY KEY,
+    member_id INT REFERENCES members(id) ON DELETE SET NULL,
+    role_title VARCHAR(150) NOT NULL,
+    committee_type VARCHAR(100) NOT NULL,
+    ward_id INT REFERENCES wards(id) ON DELETE SET NULL,
+    display_order INT DEFAULT 0,
+    term VARCHAR(50) DEFAULT '2024 – 2026',
+    occupant_name VARCHAR(150),
+    phone VARCHAR(50),
+    status VARCHAR(50) DEFAULT 'filled',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS calendar (
+    id SERIAL PRIMARY KEY,
+    date_string VARCHAR(50) UNIQUE NOT NULL,
+    day_data JSONB NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS push_subscriptions (
+    id SERIAL PRIMARY KEY,
+    endpoint TEXT UNIQUE NOT NULL,
+    keys JSONB NOT NULL,
+    device_type VARCHAR(50) DEFAULT 'web',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS mass_schedules (
+    id SERIAL PRIMARY KEY,
+    day_type VARCHAR(100) NOT NULL,
+    time_slot VARCHAR(100) NOT NULL,
+    description_en TEXT,
+    description_ml TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);

@@ -1,5 +1,5 @@
 import { webpush } from "../config/vapid";
-import { PushSubscription } from "../models/PushSubscription";
+import { pool } from "../config/db";
 
 export interface PushNotificationPayload {
   title: string;
@@ -11,7 +11,8 @@ export interface PushNotificationPayload {
 
 export async function sendPushToAllParishioners(payload: PushNotificationPayload) {
   try {
-    const subscriptions = await PushSubscription.find({});
+    const result = await pool.query('SELECT * FROM push_subscriptions');
+    const subscriptions = result.rows;
     if (!subscriptions || subscriptions.length === 0) {
       console.log("[PushNotifier] No active push subscriptions found.");
       return { total: 0, sent: 0, removed: 0 };
@@ -32,11 +33,12 @@ export async function sendPushToAllParishioners(payload: PushNotificationPayload
 
     await Promise.all(
       subscriptions.map(async (sub) => {
+        const keys = typeof sub.keys === 'string' ? JSON.parse(sub.keys) : sub.keys;
         const pushSubscription = {
           endpoint: sub.endpoint,
           keys: {
-            p256dh: sub.keys.p256dh,
-            auth: sub.keys.auth,
+            p256dh: keys.p256dh,
+            auth: keys.auth,
           },
         };
 
@@ -47,7 +49,7 @@ export async function sendPushToAllParishioners(payload: PushNotificationPayload
           const statusCode = err?.statusCode || err?.status;
           if (statusCode === 410 || statusCode === 404) {
             console.log(`[PushNotifier] Removing expired subscription: ${sub.endpoint}`);
-            await PushSubscription.deleteOne({ _id: sub._id });
+            await pool.query('DELETE FROM push_subscriptions WHERE endpoint = $1', [sub.endpoint]);
             removed++;
           } else {
             console.error(`[PushNotifier] Error sending push to ${sub.endpoint}:`, err?.message || err);

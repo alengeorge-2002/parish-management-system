@@ -1,5 +1,4 @@
-import connectDB from './config/db';
-import mongoose from 'mongoose';
+import { pool, connectDB } from './config/db';
 
-export { connectDB };
-export default mongoose;
+export { connectDB, pool };
+export default pool;

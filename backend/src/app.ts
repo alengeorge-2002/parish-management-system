@@ -32,7 +32,7 @@ app.use('/uploads', express.static(path.join(process.cwd(), 'uploads')));
 app.use('/api', apiRouter);
 
 app.get('/', (req: Request, res: Response) => {
-  res.send('Parish Management API (MongoDB Serverless)');
+  res.send('Parish Management API (PostgreSQL)');
 });
 
 export default app;

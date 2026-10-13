@@ -13,7 +13,7 @@ export const handler = async (event: any, context: any) => {
     context.callbackWaitsForEmptyEventLoop = false;
   }
 
-  // Ensure Mongoose connection is established & cached
+  // Ensure PostgreSQL connection is established & cached
   await connectDB();
 
   if (!serverlessExpressInstance) {

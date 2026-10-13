@@ -1,36 +1,23 @@
-import mongoose from 'mongoose';
+import { Pool } from 'pg';
+import dotenv from 'dotenv';
 
-const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://127.0.0.1:27017/devagiri_parish_db';
+dotenv.config();
 
-let cachedDb: typeof mongoose | null = null;
+export const pool = new Pool({
+  connectionString: process.env.DATABASE_URL || 'postgresql://postgres:postgres@localhost:5432/devagiri_parish_db',
+  ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false,
+});
 
-/**
- * Centralized MongoDB Connection Module using Mongoose.
- * Implements global connection pooling and caching to support Serverless / Lambda reuse.
- */
-export const connectDB = async (): Promise<typeof mongoose> => {
-  // If connection already exists and readyState is 1 (connected), return cached connection
-  if (cachedDb && mongoose.connection.readyState === 1) {
-    return cachedDb;
-  }
-
-  if (mongoose.connection.readyState === 1) {
-    cachedDb = mongoose;
-    return cachedDb;
-  }
-
-  console.log(`Establishing MongoDB connection to ${MONGODB_URI}...`);
+export const connectDB = async (): Promise<Pool> => {
   try {
-    cachedDb = await mongoose.connect(MONGODB_URI, {
-      bufferCommands: false,
-    });
-    console.log(`MongoDB Connected: ${mongoose.connection.host}/${mongoose.connection.name}`);
-    return cachedDb;
-  } catch (err: any) {
-    console.error('MongoDB Connection Error:', err.message || err);
-    cachedDb = null;
-    throw err;
+    const client = await pool.connect();
+    console.log('PostgreSQL Connected successfully via connection pool.');
+    client.release();
+    return pool;
+  } catch (error) {
+    console.error('PostgreSQL Connection error:', error);
+    throw error;
   }
 };
 
-export default connectDB;
+export default pool;
