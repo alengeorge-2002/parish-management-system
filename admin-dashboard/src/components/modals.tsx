@@ -6,6 +6,34 @@ import { BLOOD_GROUPS } from "../lib/data";
 import { getMemberAvatar } from "../utils/getMemberAvatar";
 
 /* ---------- 4-Step Add/Edit Member Modal ---------- */
+export interface MemberFormData {
+  fullName: string;
+  malayalamName: string;
+  baptismName: string;
+  gender: string;
+  dob: string;
+  bloodGroup: string;
+  familyId: string;
+  relationshipToHead: string;
+  wardId: string;
+  ward_id?: string;
+  wardNumber: string | number;
+  ward_number?: string | number;
+  wardName?: string;
+  ward_name?: string;
+  unit: string;
+  unit_number: string;
+  baptismDate: string;
+  firstCommunionDate: string;
+  confirmationDate: string;
+  marriageDate: string;
+  phone: string;
+  email: string;
+  currentAddress: string;
+  status: string;
+  [key: string]: any;
+}
+
 export function MemberModal({
   open,
   onClose,
@@ -26,7 +54,7 @@ export function MemberModal({
   const [saving, setSaving] = useState(false);
   const [photoFile, setPhotoFile] = useState<File | null>(null);
 
-  const [formData, setFormData] = useState({
+  const [formData, setFormData] = useState<MemberFormData>({
     fullName: "",
     malayalamName: "",
     baptismName: "",
@@ -36,7 +64,11 @@ export function MemberModal({
     familyId: "",
     relationshipToHead: "Member",
     wardId: "",
+    ward_id: "",
     wardNumber: "",
+    ward_number: "",
+    wardName: "",
+    ward_name: "",
     unit: "",
     unit_number: "",
     baptismDate: "",
@@ -70,7 +102,11 @@ export function MemberModal({
         familyId: String(fId),
         relationshipToHead: initialData.relationshipToHead || initialData.relationship_role || "Member",
         wardId: String(wId),
+        ward_id: String(wId),
         wardNumber: initialData.wardNumber || initialData.ward_number || "",
+        ward_number: initialData.ward_number || initialData.wardNumber || "",
+        wardName: initialData.wardName || initialData.ward_name || initialData.wardPatron || "",
+        ward_name: initialData.ward_name || initialData.wardName || initialData.wardPatron || "",
         unit: uVal,
         unit_number: uVal,
         baptismDate: initialData.baptismDate || initialData.baptism_date || "",
@@ -93,7 +129,11 @@ export function MemberModal({
         familyId: "",
         relationshipToHead: "Member",
         wardId: "",
+        ward_id: "",
         wardNumber: "",
+        ward_number: "",
+        wardName: "",
+        ward_name: "",
         unit: "",
         unit_number: "",
         baptismDate: "",
