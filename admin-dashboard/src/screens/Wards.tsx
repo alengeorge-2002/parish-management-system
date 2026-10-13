@@ -175,14 +175,18 @@ export default function Wards() {
 
               {/* Units Pills & Add Unit Button */}
               <div className="mt-3 flex flex-wrap items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
-                {unitsList.map((u: any, idx: number) => (
-                  <span
-                    key={idx}
-                    className="px-2 py-0.5 text-xs rounded bg-[#1e222b] text-[#F4C430] border border-[#2d323e]"
-                  >
-                    {typeof u === "string" ? u : u.unitNumber || u.unit_number || `Unit ${idx + 1}`}
-                  </span>
-                ))}
+                {unitsList.map((u: any, idx: number) => {
+                  const num = typeof u === "string" ? u : (u.unitNumber || u.unit_number || `Unit ${idx + 1}`);
+                  const name = typeof u === "object" && (u.unitName || u.unit_name) ? ` (${u.unitName || u.unit_name})` : "";
+                  return (
+                    <span
+                      key={idx}
+                      className="px-2 py-0.5 text-xs rounded bg-[#1e222b] text-[#F4C430] border border-[#2d323e]"
+                    >
+                      {num}{name}
+                    </span>
+                  );
+                })}
                 <button
                   type="button"
                   onClick={(e) => {
