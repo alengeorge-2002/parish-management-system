@@ -6,7 +6,8 @@
     "start": "expo start --web --port 8081",
     "android": "expo start --android",
     "ios": "expo start --ios",
-    "web": "expo start --web --port 8081"
+    "web": "expo start --web --port 8081",
+    "build": "npx expo export -p web"
   },
   "dependencies": {
     "@expo-google-fonts/noto-serif-malayalam": "^0.4.3",
