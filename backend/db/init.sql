@@ -9,6 +9,13 @@ CREATE TABLE IF NOT EXISTS wards (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
+ALTER TABLE wards ADD COLUMN IF NOT EXISTS ward_number INTEGER;
+ALTER TABLE wards ADD COLUMN IF NOT EXISTS ward_prefix VARCHAR(50) DEFAULT 'W';
+ALTER TABLE wards ADD COLUMN IF NOT EXISTS total_units INT DEFAULT 0;
+ALTER TABLE wards ADD COLUMN IF NOT EXISTS representative_name VARCHAR(150);
+ALTER TABLE wards ADD COLUMN IF NOT EXISTS contact_phone VARCHAR(50);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_wards_ward_name ON wards(ward_name);
+
 INSERT INTO wards (ward_name, ward_number, total_units, representative_name, contact_phone) VALUES 
 ('St. Jude Ward', 1, 4, 'Varghese Mathew', '+91 94471 00001'),
 ('St. Mary Ward', 2, 3, 'Joseph Kuriakose', '+91 94471 00002'),
