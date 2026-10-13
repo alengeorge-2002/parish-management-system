@@ -107,20 +107,92 @@ export const deleteUser = async (req: Request, res: Response) => {
   }
 };
 
+let unitsSchemaEnsured = false;
+export const ensureUnitsSchema = async () => {
+  if (unitsSchemaEnsured) return;
+  try {
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS units (
+        id SERIAL PRIMARY KEY,
+        unit_number VARCHAR(50) NOT NULL,
+        unit_name VARCHAR(150),
+        representative_name VARCHAR(150),
+        representative_phone VARCHAR(50),
+        ward_id INT NOT NULL REFERENCES wards(id) ON DELETE CASCADE,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+      DO $$
+      BEGIN
+        IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'units' AND column_name = 'name') 
+           AND NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'units' AND column_name = 'unit_name') THEN
+          ALTER TABLE units RENAME COLUMN name TO unit_name;
+        END IF;
+        IF EXISTS (
+          SELECT 1 FROM information_schema.columns 
+          WHERE table_name = 'units' AND column_name = 'unit_number' AND data_type IN ('integer', 'smallint', 'bigint')
+        ) THEN
+          ALTER TABLE units ALTER COLUMN unit_number TYPE VARCHAR(50) USING unit_number::varchar;
+        END IF;
+      END $$;
+      ALTER TABLE units ADD COLUMN IF NOT EXISTS unit_number VARCHAR(50);
+      ALTER TABLE units ADD COLUMN IF NOT EXISTS unit_name VARCHAR(150);
+      ALTER TABLE units ADD COLUMN IF NOT EXISTS representative_name VARCHAR(150);
+      ALTER TABLE units ADD COLUMN IF NOT EXISTS representative_phone VARCHAR(50);
+    `);
+    unitsSchemaEnsured = true;
+  } catch (err: any) {
+    console.error('ensureUnitsSchema notice:', err?.message || err);
+  }
+};
+
 /*** Ward Management ***/
 export const getAllWards = async (_req: Request, res: Response) => {
   try {
+    // 1. Ensure units schema and columns exist safely
+    await ensureUnitsSchema();
+
+    // 2. Inspect available columns in units table for 100% resilient querying
+    const colCheck = await pool.query(
+      `SELECT column_name FROM information_schema.columns WHERE table_name = 'units'`
+    ).catch(() => ({ rows: [] }));
+    const cols = new Set(colCheck.rows.map((r: any) => r.column_name.toLowerCase()));
+
+    // Safe column expressions based on active PostgreSQL schema
+    const unitNameExpr = cols.has('unit_name')
+      ? "COALESCE(u.unit_name, '')"
+      : cols.has('name')
+        ? "COALESCE(u.name, '')"
+        : cols.has('title')
+          ? "COALESCE(u.title, '')"
+          : "''";
+    const unitNumExpr = cols.has('unit_number')
+      ? 'u.unit_number::text'
+      : 'u.id::text';
+    const repNameExpr = cols.has('representative_name')
+      ? "COALESCE(u.representative_name, '')"
+      : cols.has('rep_name')
+        ? "COALESCE(u.rep_name, '')"
+        : "''";
+    const repPhoneExpr = cols.has('representative_phone')
+      ? "COALESCE(u.representative_phone, '')"
+      : cols.has('rep_phone')
+        ? "COALESCE(u.rep_phone, '')"
+        : "''";
+
     const result = await pool.query(
       `SELECT w.*,
          COALESCE(
            (SELECT json_agg(json_build_object(
              'id', u.id,
              '_id', u.id,
-             'unitNumber', u.unit_number,
-             'unit_number', u.unit_number,
-             'unitName', u.unit_name,
-             'representativeName', u.representative_name,
-             'representativePhone', u.representative_phone
+             'unitNumber', ${unitNumExpr},
+             'unit_number', ${unitNumExpr},
+             'unitName', ${unitNameExpr},
+             'unit_name', ${unitNameExpr},
+             'representativeName', ${repNameExpr},
+             'representative_name', ${repNameExpr},
+             'representativePhone', ${repPhoneExpr},
+             'representative_phone', ${repPhoneExpr}
            )) FROM units u WHERE u.ward_id = w.id),
            '[]'::json
          ) as units,
@@ -129,25 +201,43 @@ export const getAllWards = async (_req: Request, res: Response) => {
        ORDER BY COALESCE(w.ward_number, w.id) ASC`
     );
 
-    const wards = result.rows.map((row: any) => ({
-      ...row,
-      id: String(row.id),
-      _id: String(row.id),
-      wardNumber: row.ward_number || row.id,
-      ward_number: row.ward_number || row.id,
-      wardName: row.ward_name,
-      ward_name: row.ward_name,
-      patron: row.ward_name,
-      representativeName: row.representative_name || '',
-      representative_name: row.representative_name || '',
-      president: row.representative_name || '',
-      contactPhone: row.contact_phone || '',
-      contact_phone: row.contact_phone || '',
-      phone: row.contact_phone || '',
-      total_units: row.total_units || (row.units ? row.units.length : 0),
-      totalFamilies: row.total_families || 0,
-      units: row.units || [],
-    }));
+    const wards = result.rows.map((row: any) => {
+      const mappedUnits = (row.units || []).map((u: any) => ({
+        ...u,
+        id: u?.id ? String(u.id) : undefined,
+        _id: u?.id ? String(u.id) : undefined,
+        unitNumber: u?.unitNumber ?? u?.unit_number ?? '',
+        unit_number: u?.unitNumber ?? u?.unit_number ?? '',
+        unitName: u?.unitName ?? u?.unit_name ?? '',
+        unit_name: u?.unitName ?? u?.unit_name ?? '',
+        representativeName: u?.representativeName ?? u?.representative_name ?? '',
+        representative_name: u?.representativeName ?? u?.representative_name ?? '',
+        representativePhone: u?.representativePhone ?? u?.representative_phone ?? '',
+        representative_phone: u?.representativePhone ?? u?.representative_phone ?? '',
+      }));
+
+      return {
+        ...row,
+        id: String(row.id),
+        _id: String(row.id),
+        wardNumber: row.ward_number || row.id,
+        ward_number: row.ward_number || row.id,
+        wardName: row.ward_name,
+        ward_name: row.ward_name,
+        patron: row.ward_name,
+        representativeName: row.representative_name || '',
+        representative_name: row.representative_name || '',
+        president: row.representative_name || '',
+        contactPhone: row.contact_phone || '',
+        contact_phone: row.contact_phone || '',
+        phone: row.contact_phone || '',
+        total_units: row.total_units || mappedUnits.length,
+        totalUnits: row.total_units || mappedUnits.length,
+        totalFamilies: row.total_families || 0,
+        total_families: row.total_families || 0,
+        units: mappedUnits,
+      };
+    });
 
     res.json(wards);
   } catch (error: any) {
@@ -242,15 +332,48 @@ export const addUnitToWard = async (req: Request, res: Response): Promise<any> =
     const wardId = parseId(req.params.id);
     if (!wardId) return res.status(400).json({ message: 'Valid ward id required' });
 
+    await ensureUnitsSchema();
+
     const unitNumber = String(req.body.unitNumber || req.body.unit_number || 'Unit 1');
-    const unitName = req.body.unitName || '';
-    const repName = req.body.representativeName || '';
-    const repPhone = req.body.representativePhone || '';
+    const unitName = req.body.unitName || req.body.unit_name || '';
+    const repName = req.body.representativeName || req.body.representative_name || '';
+    const repPhone = req.body.representativePhone || req.body.representative_phone || '';
+
+    // Inspect available columns in units table
+    const colCheck = await pool.query(
+      `SELECT column_name FROM information_schema.columns WHERE table_name = 'units'`
+    ).catch(() => ({ rows: [] }));
+    const cols = new Set(colCheck.rows.map((r: any) => r.column_name.toLowerCase()));
+
+    const insertCols: string[] = ['ward_id', 'unit_number'];
+    const insertVals: any[] = [wardId, unitNumber];
+    const placeholders: string[] = ['$1', '$2'];
+
+    if (cols.has('unit_name')) {
+      insertCols.push('unit_name');
+      insertVals.push(unitName);
+      placeholders.push(`$${insertVals.length}`);
+    } else if (cols.has('name')) {
+      insertCols.push('name');
+      insertVals.push(unitName);
+      placeholders.push(`$${insertVals.length}`);
+    }
+
+    if (cols.has('representative_name')) {
+      insertCols.push('representative_name');
+      insertVals.push(repName);
+      placeholders.push(`$${insertVals.length}`);
+    }
+
+    if (cols.has('representative_phone')) {
+      insertCols.push('representative_phone');
+      insertVals.push(repPhone);
+      placeholders.push(`$${insertVals.length}`);
+    }
 
     await pool.query(
-      `INSERT INTO units (ward_id, unit_number, unit_name, representative_name, representative_phone)
-       VALUES ($1, $2, $3, $4, $5)`,
-      [wardId, unitNumber, unitName, repName, repPhone]
+      `INSERT INTO units (${insertCols.join(', ')}) VALUES (${placeholders.join(', ')})`,
+      insertVals
     );
 
     await pool.query(
@@ -258,17 +381,41 @@ export const addUnitToWard = async (req: Request, res: Response): Promise<any> =
       [wardId]
     );
 
+    const unitNameExpr = cols.has('unit_name')
+      ? "COALESCE(u.unit_name, '')"
+      : cols.has('name')
+        ? "COALESCE(u.name, '')"
+        : cols.has('title')
+          ? "COALESCE(u.title, '')"
+          : "''";
+    const unitNumExpr = cols.has('unit_number')
+      ? 'u.unit_number::text'
+      : 'u.id::text';
+    const repNameExpr = cols.has('representative_name')
+      ? "COALESCE(u.representative_name, '')"
+      : cols.has('rep_name')
+        ? "COALESCE(u.rep_name, '')"
+        : "''";
+    const repPhoneExpr = cols.has('representative_phone')
+      ? "COALESCE(u.representative_phone, '')"
+      : cols.has('rep_phone')
+        ? "COALESCE(u.rep_phone, '')"
+        : "''";
+
     const updated = await pool.query(
       `SELECT w.*,
          COALESCE(
            (SELECT json_agg(json_build_object(
              'id', u.id,
              '_id', u.id,
-             'unitNumber', u.unit_number,
-             'unit_number', u.unit_number,
-             'unitName', u.unit_name,
-             'representativeName', u.representative_name,
-             'representativePhone', u.representative_phone
+             'unitNumber', ${unitNumExpr},
+             'unit_number', ${unitNumExpr},
+             'unitName', ${unitNameExpr},
+             'unit_name', ${unitNameExpr},
+             'representativeName', ${repNameExpr},
+             'representative_name', ${repNameExpr},
+             'representativePhone', ${repPhoneExpr},
+             'representative_phone', ${repPhoneExpr}
            )) FROM units u WHERE u.ward_id = w.id),
            '[]'::json
          ) as units
@@ -276,7 +423,36 @@ export const addUnitToWard = async (req: Request, res: Response): Promise<any> =
       [wardId]
     );
 
-    return res.status(201).json(updated.rows[0]);
+    const row = updated.rows[0];
+    if (!row) return res.status(404).json({ error: 'Ward not found' });
+
+    const mappedUnits = (row.units || []).map((u: any) => ({
+      ...u,
+      id: u?.id ? String(u.id) : undefined,
+      _id: u?.id ? String(u.id) : undefined,
+      unitNumber: u?.unitNumber ?? u?.unit_number ?? '',
+      unit_number: u?.unitNumber ?? u?.unit_number ?? '',
+      unitName: u?.unitName ?? u?.unit_name ?? '',
+      unit_name: u?.unitName ?? u?.unit_name ?? '',
+      representativeName: u?.representativeName ?? u?.representative_name ?? '',
+      representative_name: u?.representativeName ?? u?.representative_name ?? '',
+      representativePhone: u?.representativePhone ?? u?.representative_phone ?? '',
+      representative_phone: u?.representativePhone ?? u?.representative_phone ?? '',
+    }));
+
+    return res.status(201).json({
+      ...row,
+      id: String(row.id),
+      _id: String(row.id),
+      wardNumber: row.ward_number || row.id,
+      ward_number: row.ward_number || row.id,
+      wardName: row.ward_name,
+      ward_name: row.ward_name,
+      patron: row.ward_name,
+      total_units: row.total_units || mappedUnits.length,
+      totalUnits: row.total_units || mappedUnits.length,
+      units: mappedUnits,
+    });
   } catch (err: any) {
     return res.status(500).json({ error: err.message });
   }

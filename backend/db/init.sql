@@ -32,10 +32,29 @@ CREATE TABLE IF NOT EXISTS units (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
-INSERT INTO units (unit_number, ward_id) VALUES 
-('101', 1),
-('202', 2),
-('5', 3)
+DO $$ 
+BEGIN 
+  IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'units' AND column_name = 'name') 
+     AND NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'units' AND column_name = 'unit_name') THEN
+    ALTER TABLE units RENAME COLUMN name TO unit_name;
+  END IF;
+  IF EXISTS (
+    SELECT 1 FROM information_schema.columns 
+    WHERE table_name = 'units' AND column_name = 'unit_number' AND data_type IN ('integer', 'smallint', 'bigint')
+  ) THEN
+    ALTER TABLE units ALTER COLUMN unit_number TYPE VARCHAR(50) USING unit_number::varchar;
+  END IF;
+END $$;
+
+ALTER TABLE units ADD COLUMN IF NOT EXISTS unit_number VARCHAR(50);
+ALTER TABLE units ADD COLUMN IF NOT EXISTS unit_name VARCHAR(150);
+ALTER TABLE units ADD COLUMN IF NOT EXISTS representative_name VARCHAR(150);
+ALTER TABLE units ADD COLUMN IF NOT EXISTS representative_phone VARCHAR(50);
+
+INSERT INTO units (unit_number, unit_name, ward_id) VALUES 
+('101', 'Unit 101', 1),
+('202', 'Unit 202', 2),
+('5', 'Unit 5', 3)
 ON CONFLICT DO NOTHING;
 
 CREATE TABLE IF NOT EXISTS families (

@@ -3,6 +3,8 @@ const mongoose = require('mongoose');
 const UnitSchema = new mongoose.Schema({
   unitNumber: { type: String, required: true }, // e.g., 'Unit I'
   unitName: { type: String },
+  unit_name: { type: String },
+  name: { type: String },
   unit_number: { type: String },
   representativeName: { type: String },
   representativePhone: { type: String }

@@ -4,6 +4,7 @@ export interface WardUnit {
   unitNumber?: string | number;
   unit_name?: string;
   unitName?: string;
+  name?: string;
   representative_name?: string;
   representativeName?: string;
   representative_phone?: string;
