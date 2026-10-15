@@ -29,7 +29,14 @@ export const getAllCalendarDays = async (_req: Request, res: Response): Promise<
  */
 export const getCalendarByDate = async (req: Request, res: Response): Promise<void> => {
   try {
-    const { dateString } = req.params;
+    let { dateString } = req.params;
+    if (dateString === 'today') {
+      const today = new Date();
+      const year = today.getFullYear();
+      const month = String(today.getMonth() + 1).padStart(2, '0');
+      const day = String(today.getDate()).padStart(2, '0');
+      dateString = `${year}-${month}-${day}`;
+    }
     const result = await pool.query(
       `SELECT id, id as _id, date_string as "dateString", day_data as "dayData"
        FROM calendar

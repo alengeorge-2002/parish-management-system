@@ -39,6 +39,8 @@ router.use('/announcements', announcementRouter);
 router.use('/feasts', feastRouter);
 router.use('/events', eventRouter);
 router.use('/calendar', calendarRouter);
+router.use('/readings', calendarRouter);
+router.use('/liturgical', calendarRouter);
 router.use('/notifications', notificationRouter);
 router.use('/', ministryRouter);
 router.use('/', parishCouncilRouter);
