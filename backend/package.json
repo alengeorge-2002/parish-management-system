@@ -7,7 +7,8 @@
     "build": "tsc",
     "start": "node dist/index.js",
     "dev": "nodemon",
-    "seed": "node scripts/seedDatabase.js"
+    "seed": "node dist/scripts/seed-default-users.js",
+    "seed:users": "node dist/scripts/seed-default-users.js"
   },
   "keywords": [],
   "author": "",

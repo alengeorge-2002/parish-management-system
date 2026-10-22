@@ -51,6 +51,7 @@ backend/uploads/**
 # Temporary / Scratch files
 scratch/
 backend/scratch_*.txt
+*.ext4
 .tmp-*
 .claude-replay.*
 

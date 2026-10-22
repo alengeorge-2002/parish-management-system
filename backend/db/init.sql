@@ -114,20 +114,23 @@ ON CONFLICT DO NOTHING;
 
 CREATE TABLE IF NOT EXISTS app_users (
     id SERIAL PRIMARY KEY,
-    member_id INT UNIQUE NOT NULL REFERENCES members(id) ON DELETE CASCADE,
+    member_id INT NOT NULL REFERENCES members(id) ON DELETE CASCADE,
     access_key VARCHAR(255) UNIQUE NOT NULL,
     role VARCHAR(50) DEFAULT 'parishioner',
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
+ALTER TABLE app_users DROP CONSTRAINT IF EXISTS app_users_member_id_key;
 CREATE INDEX IF NOT EXISTS idx_app_users_access_key ON app_users(access_key);
 
 INSERT INTO app_users (member_id, access_key, role) VALUES 
+(1, 'admin_secret_key_123', 'admin'),
+(1, 'parishioner_key_456', 'parishioner'),
 (1, 'access_key_admin_123', 'admin'),
 (2, 'access_key_user_456', 'parishioner'),
 (3, 'access_key_user_789', 'parishioner'),
 (4, 'access_key_user_ponnamattam', 'parishioner')
-ON CONFLICT DO NOTHING;
+ON CONFLICT (access_key) DO NOTHING;
 
 CREATE TABLE IF NOT EXISTS announcements (
     id SERIAL PRIMARY KEY,
