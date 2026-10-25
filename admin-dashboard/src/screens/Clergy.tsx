@@ -3,35 +3,34 @@ import { Phone, Upload, Pencil, CalendarClock, Plus, Trash2 } from "lucide-react
 import { Card, Pill, Button, IconButton } from "../components/ui";
 import { ClergyModal } from "../components/modals";
 import { useApp } from "../lib/app-context";
-import { CLERGY } from "../lib/data";
 import { clergyApi } from "../utils/api-client";
 
 export default function Clergy() {
   const { tt, lang, toast } = useApp();
   const [modal, setModal] = useState(false);
   const [editingClergy, setEditingClergy] = useState<any>(null);
-  const [clergyList, setClergyList] = useState<any[]>(CLERGY);
+  const [clergyList, setClergyList] = useState<any[]>([]);
 
   const loadData = async () => {
     try {
       const data = await clergyApi.list();
-      if (Array.isArray(data) && data.length > 0) {
+      if (Array.isArray(data)) {
         setClergyList(
           data.map((c: any) => ({
             id: c.id || c._id,
             name: c.name || "Rev. Priest",
             title: c.designation || c.title || c.role_type || "Vicar",
             role: c.role || c.role_type || "Parish Priest",
-            phone: c.phone_number || c.phone || "+91 98765 43210",
-            tenure: c.tenure || "2022 — Present",
+            phone: c.phone_number || c.phone || "",
+            tenure: c.tenure || "",
             primary: c.role_type === "Vicar" || c.title === "Vicar",
-            portrait: c.avatar_url || c.avatarUrl || c.portrait || "https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=300&h=300&fit=crop&auto=format",
+            portrait: c.avatar_url || c.avatarUrl || c.portrait || "",
             raw: c,
           }))
         );
       }
     } catch (e) {
-      console.warn("[Clergy] API fetch fallback to seed data:", e);
+      console.error("[Clergy] API fetch error:", e);
     }
   };
 

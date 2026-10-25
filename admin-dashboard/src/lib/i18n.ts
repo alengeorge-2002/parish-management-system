@@ -20,6 +20,7 @@ export const t: Dict = {
   nav_wards: { en: "Wards Management", ml: "വാർഡ് നിർവഹണം" },
   nav_families: { en: "Families Management", ml: "കുടുംബ നിർവഹണം" },
   nav_members: { en: "Members Management", ml: "അംഗ നിർവഹണം" },
+  nav_users: { en: "User Management", ml: "ഉപയോക്തൃ നിർവഹണം" },
   nav_announcements: { en: "Announcements Management", ml: "അറിയിപ്പ് നിർവഹണം" },
   nav_calendar: { en: "Calendar Management", ml: "കലണ്ടർ നിർവഹണം" },
   nav_clergy: { en: "Clergy Management", ml: "വൈദിക നിർവഹണം" },

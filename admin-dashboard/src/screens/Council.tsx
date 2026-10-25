@@ -2,13 +2,12 @@ import React, { useState, useEffect } from "react";
 import { Plus, Phone, UserPlus, Pencil, Crown, Check, Search, Trash2 } from "lucide-react";
 import { Card, Pill, Button, IconButton, Modal, Field, Input, Select } from "../components/ui";
 import { useApp } from "../lib/app-context";
-import { COUNCIL_SEATS, MEMBERS } from "../lib/data";
 import { parishCouncilApi, membersApi } from "../utils/api-client";
 import getMemberAvatar from "../utils/getMemberAvatar";
 
 export default function Council() {
   const { lang, toast } = useApp();
-  const [councilSeats, setCouncilSeats] = useState<any[]>(COUNCIL_SEATS);
+  const [councilSeats, setCouncilSeats] = useState<any[]>([]);
   const [isAddSeatModalOpen, setIsAddSeatModalOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
@@ -32,7 +31,7 @@ export default function Council() {
   const loadSeats = async () => {
     try {
       const data = await parishCouncilApi.list();
-      if (Array.isArray(data) && data.length > 0) {
+      if (Array.isArray(data)) {
         const fetchedSeats = data.map((s: any) => ({
           id: s.id || s._id,
           seat: s.roleTitle || s.role_title || s.seat || "Council Seat",
@@ -44,64 +43,33 @@ export default function Council() {
           status: s.status || ((s.holder || s.occupantName || s.first_name) ? "filled" : "vacant"),
         }));
 
-        const existingTitles = new Set(COUNCIL_SEATS.map((cs) => cs.seat.toLowerCase()));
-        const extraSeats = fetchedSeats.filter((fs) => !existingTitles.has(fs.seat.toLowerCase()));
-
-        setCouncilSeats([...COUNCIL_SEATS, ...extraSeats]);
-      } else {
-        setCouncilSeats(COUNCIL_SEATS);
+        setCouncilSeats(fetchedSeats);
       }
-    } catch (_) {
-      setCouncilSeats(COUNCIL_SEATS);
+    } catch (e) {
+      console.error("[Council] API fetch error:", e);
     }
   };
 
   const loadParishioners = async () => {
     try {
       const data = await membersApi.list();
-      if (Array.isArray(data) && data.length > 0) {
+      if (Array.isArray(data)) {
         setParishionersList(
           data.map((m: any) => ({
             id: m.id || m._id,
-            name: m.name || `${m.firstName || ""} ${m.lastName || ""}`.trim() || "Parishioner",
-            nameMl: m.nameMl || m.malayalamName || "",
-            phone: m.phone || m.phoneNumber || "+91 98765 43210",
-            ward: m.wardNumber || m.ward || 1,
-            unit: m.unit || m.unit_number || "Unit I",
-            familyHouse: m.familyHouse || m.houseName || "Parish House",
+            name: m.name || `${m.firstName || m.first_name || ""} ${m.lastName || m.last_name || ""}`.trim() || "Parishioner",
+            nameMl: m.nameMl || m.malayalam_name || m.malayalamName || "",
+            phone: m.phone || m.phoneNumber || m.phone_number || "",
+            ward: m.wardNumber || (typeof m.ward_id === 'object' ? m.ward_id?.ward_number : m.ward_id) || m.ward || 1,
+            unit: m.unit || m.unit_number || "",
+            familyHouse: m.familyHouse || m.house_name || m.houseName || "",
             avatar: getMemberAvatar(m.raw || m),
             raw: m,
           }))
         );
-      } else {
-        setParishionersList(
-          MEMBERS.map((m) => ({
-            id: m.id,
-            name: m.name,
-            nameMl: m.nameMl,
-            phone: m.phone,
-            ward: m.ward,
-            unit: "Unit I",
-            familyHouse: m.familyHouse,
-            avatar: getMemberAvatar(m),
-            raw: m,
-          }))
-        );
       }
-    } catch (_) {
-      setParishionersList(
-        MEMBERS.map((m) => ({
-          id: m.id,
-          name: m.name,
-          nameMl: m.nameMl,
-          phone: m.phone,
-          ward: m.ward,
-          unit: "Unit I",
-          familyHouse: m.familyHouse,
-          avatar: getMemberAvatar(m),
-          raw: m,
-        }))
-      );
+    } catch (e) {
+      console.error("[Council] API members fetch error:", e);
     }
   };
 

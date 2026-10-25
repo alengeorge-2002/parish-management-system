@@ -3,7 +3,7 @@ import { Plus, ChevronLeft, ChevronRight, Clock, Trash2, BookOpen } from "lucide
 import { Card, Button, Pill, IconButton } from "../components/ui";
 import { Modal, Field, Input, Select } from "../components/ui";
 import { useApp } from "../lib/app-context";
-import { FEASTS_MARCH, MASS_TIMINGS, WARDS } from "../lib/data";
+import { MASS_TIMINGS } from "../lib/data";
 import { eventsApi, calendarApi } from "../utils/api-client";
 
 const seasonColor: Record<string, string> = {
@@ -30,7 +30,7 @@ export default function CalendarScreen() {
   const [currentDate, setCurrentDate] = useState<Date>(new Date());
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
   const [modal, setModal] = useState(false);
-  const [feastsList, setFeastsList] = useState<any[]>(FEASTS_MARCH);
+  const [feastsList, setFeastsList] = useState<any[]>([]);
   const [calendarMap, setCalendarMap] = useState<Record<string, any>>({});
 
   const loadData = async () => {
@@ -40,11 +40,11 @@ export default function CalendarScreen() {
         calendarApi.list().catch(() => []),
       ]);
 
-      if (Array.isArray(eventsData) && eventsData.length > 0) {
+      if (Array.isArray(eventsData)) {
         setFeastsList(
           eventsData.map((f: any) => ({
             id: f.id || f._id,
-            date: f.target_date ? parseInt(f.target_date.split("-")[2]) || 19 : 19,
+            date: f.target_date ? parseInt(f.target_date.split("-")[2]) || 1 : 1,
             saintEn: f.title_en || f.title || "Holy Feast",
             saintMl: f.title_ml || f.description_ml || "തിരുനാൾ",
             season: f.season || f.type_badge?.toLowerCase() || "ordinary",
@@ -54,7 +54,7 @@ export default function CalendarScreen() {
         );
       }
 
-      if (Array.isArray(calendarData) && calendarData.length > 0) {
+      if (Array.isArray(calendarData)) {
         const cMap: Record<string, any> = {};
         calendarData.forEach((cItem: any) => {
           if (cItem.dateString) {
@@ -64,7 +64,7 @@ export default function CalendarScreen() {
         setCalendarMap(cMap);
       }
     } catch (e) {
-      console.warn("[Calendar] API fetch fallback to seed data:", e);
+      console.error("[Calendar] API fetch error:", e);
     }
   };
 

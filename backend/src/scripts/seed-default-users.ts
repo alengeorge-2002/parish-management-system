@@ -24,23 +24,12 @@ export async function seedDefaultUsersAndDependencies() {
 
     const wardCheck = await client.query('SELECT id, ward_name FROM wards WHERE id = 1');
     if (wardCheck.rows.length === 0) {
-      console.log('Base Ward (id: 1) not found. Creating fallback entry...');
-      // Safe insert: If 'St. Joseph Ward' name exists under another ID, use fallback name
+      console.log('Base Ward (id: 1) not found. Creating entry...');
       await client.query(`
         INSERT INTO wards (id, ward_name, ward_number, total_units, representative_name, contact_phone)
         VALUES (1, 'St. Joseph Ward', 1, 1, 'Thomas George', '+91 94471 00003')
-        ON CONFLICT (id) DO NOTHING
-        ON CONFLICT (ward_name) DO NOTHING;
+        ON CONFLICT (id) DO NOTHING;
       `);
-      // If still not present due to ward_name conflict, insert with unique name
-      const wardCheck2 = await client.query('SELECT id FROM wards WHERE id = 1');
-      if (wardCheck2.rows.length === 0) {
-        await client.query(`
-          INSERT INTO wards (id, ward_name, ward_number, total_units)
-          VALUES (1, 'St. Joseph Ward Base', 1, 1)
-          ON CONFLICT (id) DO NOTHING;
-        `);
-      }
       await client.query(`SELECT setval(pg_get_serial_sequence('wards', 'id'), COALESCE((SELECT MAX(id) FROM wards), 1));`);
       console.log('✓ Base Ward (id: 1) ensured.');
     } else {
@@ -69,19 +58,19 @@ export async function seedDefaultUsersAndDependencies() {
 
     const familyCheck = await client.query('SELECT id, family_name, ward_id FROM families WHERE id = 1');
     if (familyCheck.rows.length === 0) {
-      console.log('Base Family (id: 1) not found. Creating fallback entry linked to ward 1...');
+      console.log('Base Family (id: 1) not found. Creating entry linked to ward 1...');
       await client.query(`
-        INSERT INTO families (id, family_name, head_of_family, ward_id, unit_number, house_name, home_address, contact_number)
-        VALUES (1, 'Holy Family', 'John Doe', 1, 'Unit 1', 'Grace Villa', 'Grace Villa, Devagiri', '555-0100')
+        INSERT INTO families (id, family_name, head_of_family, ward_id, unit_number, house_name, home_address, contact_number, email)
+        VALUES (1, 'Parish Family', 'Parishioner User', 1, '101', 'Parish House', 'Devagiri, Kozhikode', '+91 98450 00002', 'parishioner@devagiriparish.com')
         ON CONFLICT (id) DO NOTHING;
       `);
       await client.query(`SELECT setval(pg_get_serial_sequence('families', 'id'), COALESCE((SELECT MAX(id) FROM families), 1));`);
       console.log('✓ Base Family (id: 1) ensured.');
     } else {
-      console.log(`✓ Existing Base Family found (id: 1, name: "${familyCheck.rows[0].family_name}", ward_id: ${familyCheck.rows[0].ward_id}). Data preserved.`);
+      console.log(`✓ Existing Base Family found (id: 1, name: "${familyCheck.rows[0].family_name}", ward_id: ${familyCheck.rows[0].ward_id}).`);
     }
 
-    // 3. Ensure Members table exists and verify base Member (id: 1)
+    // 3. Ensure Members table exists with role and is_directory_visible columns
     await client.query(`
       CREATE TABLE IF NOT EXISTS members (
         id SERIAL PRIMARY KEY,
@@ -101,25 +90,53 @@ export async function seedDefaultUsersAndDependencies() {
         gender VARCHAR(20) DEFAULT 'MALE',
         status VARCHAR(50) DEFAULT 'active',
         sacraments TEXT[] DEFAULT '{}',
+        is_directory_visible BOOLEAN DEFAULT true,
+        role VARCHAR(50) DEFAULT 'parishioner',
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
+      ALTER TABLE members ADD COLUMN IF NOT EXISTS is_directory_visible BOOLEAN DEFAULT true;
+      ALTER TABLE members ADD COLUMN IF NOT EXISTS role VARCHAR(50) DEFAULT 'parishioner';
     `);
 
-    const memberCheck = await client.query('SELECT id, first_name, last_name, family_id FROM members WHERE id = 1');
-    if (memberCheck.rows.length === 0) {
-      console.log('Base Member (id: 1) not found. Creating fallback entry linked to family 1...');
+    // Ensure Admin Member (id: 1, role: 'admin', is_directory_visible: false)
+    const adminMemberCheck = await client.query('SELECT id FROM members WHERE id = 1');
+    if (adminMemberCheck.rows.length === 0) {
       await client.query(`
-        INSERT INTO members (id, family_id, first_name, last_name, relationship_role, is_head_of_household, email, phone_number)
-        VALUES (1, 1, 'John', 'Doe', 'Head', true, 'john.doe@example.com', '555-0100')
-        ON CONFLICT (id) DO NOTHING;
+        INSERT INTO members (id, family_id, first_name, last_name, phone_number, email, relationship_role, is_head_of_household, is_directory_visible, role)
+        VALUES (1, 1, 'Admin', 'User', '+91 98450 00001', 'admin@devagiriparish.com', 'Administrator', false, false, 'admin')
+        ON CONFLICT (id) DO UPDATE SET is_directory_visible = false, role = 'admin';
       `);
-      await client.query(`SELECT setval(pg_get_serial_sequence('members', 'id'), COALESCE((SELECT MAX(id) FROM members), 1));`);
-      console.log('✓ Base Member (id: 1) ensured.');
     } else {
-      console.log(`✓ Existing Base Member found (id: 1, name: "${memberCheck.rows[0].first_name} ${memberCheck.rows[0].last_name}", family_id: ${memberCheck.rows[0].family_id}). Data preserved.`);
+      await client.query(`
+        UPDATE members SET role = 'admin', is_directory_visible = false, first_name = 'Admin', last_name = 'User'
+        WHERE id = 1;
+      `);
     }
 
-    // 4. Ensure app_users table and remove single-role uniqueness restriction on member_id
+    // Ensure Parishioner Member (id: 2, role: 'parishioner', is_directory_visible: true)
+    const parishionerMemberCheck = await client.query('SELECT id FROM members WHERE id = 2');
+    if (parishionerMemberCheck.rows.length === 0) {
+      await client.query(`
+        INSERT INTO members (id, family_id, first_name, last_name, phone_number, email, relationship_role, is_head_of_household, is_directory_visible, role, dob, occupation, blood_group)
+        VALUES (2, 1, 'Parishioner', 'User', '+91 98450 00002', 'parishioner@devagiriparish.com', 'Head', true, true, 'parishioner', '1985-05-15', 'Parishioner', 'O+')
+        ON CONFLICT (id) DO UPDATE SET is_directory_visible = true, role = 'parishioner';
+      `);
+    } else {
+      await client.query(`
+        UPDATE members SET role = 'parishioner', is_directory_visible = true, first_name = 'Parishioner', last_name = 'User'
+        WHERE id = 2;
+      `);
+    }
+
+    // Clean up any demo mock members (e.g. from earlier runs) with IDs > 2 if families/members like Ponnamattam or dummy data were created
+    await client.query(`
+      DELETE FROM members WHERE id > 2 AND last_name IN ('Ponnamattam', 'Smith', 'Doe');
+      DELETE FROM families WHERE id > 1 AND family_name IN ('Ponnamattam Family', 'Smith Family', 'Doe Family');
+    `);
+
+    await client.query(`SELECT setval(pg_get_serial_sequence('members', 'id'), COALESCE((SELECT MAX(id) FROM members), 2));`);
+
+    // 4. Ensure app_users table and populate strictly the 2 active accounts
     await client.query(`
       CREATE TABLE IF NOT EXISTS app_users (
         id SERIAL PRIMARY KEY,
@@ -128,62 +145,55 @@ export async function seedDefaultUsersAndDependencies() {
         role VARCHAR(50) DEFAULT 'parishioner',
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
+      ALTER TABLE app_users DROP CONSTRAINT IF EXISTS app_users_member_id_key;
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_app_users_access_key ON app_users(access_key);
     `);
 
-    // Drop unique constraint on member_id if it exists to allow a member to hold distinct role credentials
-    await client.query(`ALTER TABLE app_users DROP CONSTRAINT IF EXISTS app_users_member_id_key;`);
-    await client.query(`CREATE UNIQUE INDEX IF NOT EXISTS idx_app_users_access_key ON app_users(access_key);`);
+    // Purge any legacy accounts so that strictly the 2 active accounts remain in app_users
+    await client.query(`DELETE FROM app_users WHERE access_key NOT IN ('admin123', 'user123');`);
 
-    // 5. Insert default accounts safely using ON CONFLICT (access_key) DO NOTHING
-    console.log('Inserting default user accounts into app_users...');
-    const accountsToSeed = [
-      { member_id: 1, access_key: 'admin_secret_key_123', role: 'admin' },
-      { member_id: 1, access_key: 'parishioner_key_456', role: 'parishioner' },
-      // Also retain standard project keys if desired
-      { member_id: 1, access_key: 'access_key_admin_123', role: 'admin' },
-      { member_id: 1, access_key: 'access_key_user_456', role: 'parishioner' },
-    ];
+    // Insert User 1: Admin User (role: 'admin', access key: 'admin123')
+    await client.query(`
+      INSERT INTO app_users (member_id, access_key, role)
+      VALUES (1, 'admin123', 'admin')
+      ON CONFLICT (access_key) DO UPDATE SET role = 'admin', member_id = 1;
+    `);
 
-    for (const acc of accountsToSeed) {
-      await client.query(`
-        INSERT INTO app_users (member_id, access_key, role)
-        VALUES ($1, $2, $3)
-        ON CONFLICT (access_key) DO NOTHING;
-      `, [acc.member_id, acc.access_key, acc.role]);
-    }
-    await client.query(`SELECT setval(pg_get_serial_sequence('app_users', 'id'), COALESCE((SELECT MAX(id) FROM app_users), 1));`);
+    // Insert User 2: Parishioner User (role: 'parishioner', access key: 'user123')
+    await client.query(`
+      INSERT INTO app_users (member_id, access_key, role)
+      VALUES (2, 'user123', 'parishioner')
+      ON CONFLICT (access_key) DO UPDATE SET role = 'parishioner', member_id = 2;
+    `);
 
-    console.log('✓ Default admin and parishioner user accounts safely seeded.');
+    await client.query(`SELECT setval(pg_get_serial_sequence('app_users', 'id'), COALESCE((SELECT MAX(id) FROM app_users), 2));`);
 
-    // 6. Verification & Testing
-    console.log('\n--- Verifying Seeded Accounts via SQL JOIN ---');
+    console.log('✓ Exactly 2 active user accounts configured in app_users.');
+
+    // 5. Verification
     const verifyResult = await client.query(`
       SELECT u.id as user_id, u.member_id, u.access_key, u.role,
-             m.first_name, m.last_name, m.email, m.phone_number,
+             m.first_name, m.last_name, m.email, m.phone_number, m.is_directory_visible,
              f.family_name, f.house_name, w.ward_name
       FROM app_users u
       JOIN members m ON u.member_id = m.id
       JOIN families f ON m.family_id = f.id
       JOIN wards w ON f.ward_id = w.id
-      WHERE u.access_key IN ('admin_secret_key_123', 'parishioner_key_456')
-      ORDER BY u.role ASC;
+      ORDER BY u.id ASC;
     `);
 
     console.table(verifyResult.rows);
 
-    const adminAccount = verifyResult.rows.find((r) => r.role === 'admin' && r.access_key === 'admin_secret_key_123');
-    const parishionerAccount = verifyResult.rows.find((r) => r.role === 'parishioner' && r.access_key === 'parishioner_key_456');
+    const adminAccount = verifyResult.rows.find((r) => r.role === 'admin' && r.access_key === 'admin123');
+    const parishionerAccount = verifyResult.rows.find((r) => r.role === 'parishioner' && r.access_key === 'user123');
 
-    if (!adminAccount || !parishionerAccount) {
-      throw new Error('Verification failed: One or more seeded accounts are missing!');
+    if (!adminAccount || !parishionerAccount || verifyResult.rows.length !== 2) {
+      throw new Error(`Verification failed: Expected exactly 2 users, found ${verifyResult.rows.length}!`);
     }
 
-    console.log('✓ Both Admin and Parishioner records verified with valid joined member details.');
+    console.log('✓ Both Admin (admin123) and Parishioner (user123) records verified successfully.');
 
-    // 7. Test Authentication & Role Authorization logic
-    console.log('\n--- Testing Authentication & Access Levels ---');
-
-    // Test Admin Login
+    // 6. Test Authentication
     const adminToken = jwt.sign(
       {
         userId: String(adminAccount.user_id),
@@ -195,12 +205,8 @@ export async function seedDefaultUsersAndDependencies() {
       JWT_SECRET
     );
     const decodedAdmin = jwt.verify(adminToken, JWT_SECRET) as any;
-    if (decodedAdmin.role !== 'admin') {
-      throw new Error('Admin role validation failed!');
-    }
-    console.log(`✓ Admin Key [${adminAccount.access_key}] authenticated successfully with full administrative role (${decodedAdmin.role}).`);
+    if (decodedAdmin.role !== 'admin') throw new Error('Admin role validation failed!');
 
-    // Test Parishioner Login
     const parishionerToken = jwt.sign(
       {
         userId: String(parishionerAccount.user_id),
@@ -212,12 +218,9 @@ export async function seedDefaultUsersAndDependencies() {
       JWT_SECRET
     );
     const decodedParishioner = jwt.verify(parishionerToken, JWT_SECRET) as any;
-    if (decodedParishioner.role !== 'parishioner') {
-      throw new Error('Parishioner role validation failed!');
-    }
-    console.log(`✓ Parishioner Key [${parishionerAccount.access_key}] authenticated successfully with parishioner access (${decodedParishioner.role}).`);
+    if (decodedParishioner.role !== 'parishioner') throw new Error('Parishioner role validation failed!');
 
-    console.log('\n✨ Database seeding and access verification completed successfully!\n');
+    console.log('✓ Both tokens verified with correct roles.');
     return {
       adminAccount,
       parishionerAccount,

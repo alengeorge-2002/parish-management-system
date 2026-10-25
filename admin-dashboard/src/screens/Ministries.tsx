@@ -17,7 +17,7 @@ import {
 import { Card, Pill, Button, IconButton, Modal, Field, Input, Select } from "../components/ui";
 import { RosterDrawer, type RosterItem } from "../components/RosterDrawer";
 import { useApp } from "../lib/app-context";
-import { MINISTRIES, type Ministry } from "../lib/data";
+import { type Ministry } from "../lib/data";
 import { ministriesApi, membersApi } from "../utils/api-client";
 import getMemberAvatar from "../utils/getMemberAvatar";
 
@@ -39,67 +39,10 @@ const catIcon: Record<Ministry["category"], typeof Music> = {
 
 const CATS = ["All", "Liturgical", "Youth", "Charity", "Catechetical", "Devotional"] as const;
 
-const SAMPLE_MINISTRY_ROSTERS: Record<string, RosterItem[]> = {
-  "Altar Servers Guild": [
-    { name: "Dn. Alex Karimban", designation: "Spiritual Director", phone: "+91 94470 72001", email: "alex.k@devagiri.org", gender: "M" },
-    { name: "Alan Joseph", designation: "President", phone: "+91 98470 11001", email: "alan.j@devagiri.org", gender: "M" },
-    { name: "Kevin Thomas", designation: "Secretary", phone: "+91 98470 11002", email: "kevin.t@devagiri.org", gender: "M" },
-    { name: "Emmanuel George", designation: "Master of Ceremonies", phone: "+91 98470 11003", gender: "M" },
-    { name: "Leo Varghese", designation: "Senior Server", phone: "+91 98470 11004", gender: "M" },
-    { name: "Justin Paul", designation: "Altar Server", phone: "+91 98470 11005", gender: "M" },
-  ],
-  "Parish Choir": [
-    { name: "Mr. Jocy Fernandez", designation: "Choir Master", phone: "+91 94470 72002", email: "jocy.f@devagiri.org", gender: "M" },
-    { name: "Marykutty Joseph", designation: "Organist", phone: "+91 98470 22001", gender: "F" },
-    { name: "Antony Puthur", designation: "Tenor Lead", phone: "+91 94470 11202", gender: "M" },
-    { name: "Rose Augustin", designation: "Soprano Lead", phone: "+91 98470 22003", gender: "F" },
-    { name: "Joseph Chelakkal", designation: "Bass Lead", phone: "+91 98470 22004", gender: "M" },
-  ],
-  "Kerala Catholic Youth Movement": [
-    { name: "Mr. Nithin Joseph", designation: "President", phone: "+91 94470 72003", email: "nithin.kcym@devagiri.org", gender: "M" },
-    { name: "Mary Vadakkel", designation: "Vice President", phone: "+91 94470 11206", gender: "F" },
-    { name: "Antony Kochupurackal", designation: "General Secretary", phone: "+91 98470 33212", gender: "M" },
-    { name: "Joychan Kavalam", designation: "Treasurer", phone: "+91 94470 11201", gender: "M" },
-    { name: "Anish Varghese", designation: "Joint Secretary", phone: "+91 98470 33215", gender: "M" },
-  ],
-  "St. Vincent de Paul Society": [
-    { name: "Mrs. Gracy Thundiyil", designation: "President", phone: "+91 94470 72004", email: "gracy.svp@devagiri.org", gender: "F" },
-    { name: "Thomas Chelakkal", designation: "Vice President", phone: "+91 94470 11204", gender: "M" },
-    { name: "Rosamma Edathil", designation: "Secretary", phone: "+91 98470 66309", gender: "F" },
-    { name: "Kurian Manjaly", designation: "Treasurer", phone: "+91 98470 77177", gender: "M" },
-    { name: "Joseph Thekkedathu", designation: "Active Member", phone: "+91 98470 22108", gender: "M" },
-  ],
-  "Sunday Catechism": [
-    { name: "Sr. Little Rose CMC", designation: "Headmistress", phone: "+91 94470 72005", email: "rose.catechism@devagiri.org", gender: "F" },
-    { name: "Sr. Anitha Thomas", designation: "Class XI Coordinator", phone: "+91 94470 71008", gender: "F" },
-    { name: "Mary Jose", designation: "Class X Teacher", phone: "+91 98470 55001", gender: "F" },
-    { name: "Antony Puthur", designation: "Class IX Teacher", phone: "+91 94470 11202", gender: "M" },
-    { name: "Teresa Mundackal", designation: "Class VIII Teacher", phone: "+91 98470 44051", gender: "F" },
-  ],
-  "Legion of Mary": [
-    { name: "Mrs. Anna Kizhakkel", designation: "President", phone: "+91 94470 72006", email: "anna.legion@devagiri.org", gender: "F" },
-    { name: "Mariamma Thekkedathu", designation: "Vice President", phone: "+91 98470 22109", gender: "F" },
-    { name: "Rosamma Edathil", designation: "Secretary", phone: "+91 98470 66309", gender: "F" },
-    { name: "Sr. Teresa Mundackal", designation: "Spiritual Director", phone: "+91 98470 44051", gender: "F" },
-  ],
-  "Charismatic Prayer Group": [
-    { name: "Mr. Paulose Karottu", designation: "Group Leader", phone: "+91 94470 72007", email: "paulose.praise@devagiri.org", gender: "M" },
-    { name: "Simon Poovathur", designation: "Co-Leader", phone: "+91 94470 11213", gender: "M" },
-    { name: "Elias Thundiyil", designation: "Music Leader", phone: "+91 94470 11212", gender: "M" },
-    { name: "Mary Vadakkel", designation: "Intercessor", phone: "+91 94470 11206", gender: "F" },
-  ],
-  "Mother's Forum (Matru Vedi)": [
-    { name: "Mrs. Rosamma Edathil", designation: "President", phone: "+91 94470 72008", email: "rosamma.matru@devagiri.org", gender: "F" },
-    { name: "Anna Kizhakkel", designation: "Vice President", phone: "+91 98470 88402", gender: "F" },
-    { name: "Mariamma Thekkedathu", designation: "Secretary", phone: "+91 98470 22109", gender: "F" },
-    { name: "Gracy Thundiyil", designation: "Treasurer", phone: "+91 94470 72004", gender: "F" },
-  ],
-};
-
 export default function Ministries() {
   const { lang, toast } = useApp();
   const [cat, setCat] = useState<(typeof CATS)[number]>("All");
-  const [ministriesList, setMinistriesList] = useState<any[]>(MINISTRIES);
+  const [ministriesList, setMinistriesList] = useState<any[]>([]);
 
   // Roster Drawer States
   const [selectedMinistryForDetails, setSelectedMinistryForDetails] = useState<any | null>(null);
@@ -120,40 +63,40 @@ export default function Ministries() {
         membersApi.list().catch(() => []),
       ]);
 
-      if (Array.isArray(data) && data.length > 0) {
+      if (Array.isArray(data)) {
         setMinistriesList(
           data.map((m: any) => ({
             id: m.id || m._id,
             name: m.title || m.name_en || m.name || "Ministry",
             nameMl: m.nameMl || m.name_ml || "",
             coordinator: m.coordinator || "Coordinator",
-            phone: m.phone || m.phone_number || "+91 94470 72000",
-            members: m.member_count || (m.members ? m.members.length : 20),
+            phone: m.phone || m.phone_number || "",
+            members: m.member_count || (m.members ? m.members.length : 0),
             category: m.category || "Liturgical",
-            meets: m.meets || m.meeting_time || "Weekly",
+            meets: m.meets || m.meeting_time || "",
             rawMembers: m.members || [],
             raw: m,
           }))
         );
       }
 
-      if (Array.isArray(membersData) && membersData.length > 0) {
+      if (Array.isArray(membersData)) {
         setParishionersList(
           membersData.map((m: any) => ({
             id: m.id || m._id,
-            name: m.name || `${m.firstName || ""} ${m.lastName || ""}`.trim() || "Parishioner",
-            nameMl: m.nameMl || m.malayalamName || "",
-            phone: m.phone || m.phoneNumber || "+91 98765 43210",
-            ward: m.wardNumber || m.ward || 1,
-            unit: m.unit || m.unit_number || "Unit I",
-            familyHouse: m.familyHouse || m.houseName || "Parish House",
+            name: m.name || `${m.firstName || m.first_name || ""} ${m.lastName || m.last_name || ""}`.trim() || "Parishioner",
+            nameMl: m.nameMl || m.malayalam_name || m.malayalamName || "",
+            phone: m.phone || m.phoneNumber || m.phone_number || "",
+            ward: m.wardNumber || (typeof m.ward_id === "object" ? m.ward_id?.ward_number : m.ward_id) || m.ward || 1,
+            unit: m.unit || m.unit_number || "",
+            familyHouse: m.familyHouse || m.house_name || m.houseName || "",
             avatar: getMemberAvatar(m.raw || m),
             raw: m,
           }))
         );
       }
     } catch (e) {
-      console.warn("[Ministries] API fetch fallback to seed data:", e);
+      console.error("[Ministries] API fetch error:", e);
     }
   };
 
@@ -181,16 +124,9 @@ export default function Ministries() {
         name: mem.fullName || (mem.first_name ? `${mem.first_name} ${mem.last_name || ""}`.trim() : (mem.name || "Member")),
         role: mem.role_title || mem.role || "Member",
         designation: mem.role_title || mem.role || "Member",
-        phone: mem.phone_number || mem.phone || "+91 98765 43210",
+        phone: mem.phone_number || mem.phone || "",
         email: mem.email || "",
       }));
-    } else {
-      members = SAMPLE_MINISTRY_ROSTERS[ministry.name] || [
-        { name: ministry.coordinator || "Coordinator", designation: "Coordinator", phone: ministry.phone, gender: "M" },
-        { name: "Joychan Kavalam", designation: "Secretary", phone: "+91 94470 11201", gender: "M" },
-        { name: "Mary Vadakkel", designation: "Treasurer", phone: "+91 94470 11206", gender: "F" },
-        { name: "Antony Puthur", designation: "Member", phone: "+91 94470 11202", gender: "M" },
-      ];
     }
     setMinistryMembers(members);
   };

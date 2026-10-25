@@ -12,6 +12,7 @@ import {
   Database,
   LogOut,
   ChevronRight,
+  KeyRound,
 } from "lucide-react";
 import { useApp } from "../lib/app-context";
 import type { Route } from "../lib/app-context";
@@ -21,6 +22,7 @@ const NAV: { key: Route; icon: typeof Users; labelKey: string }[] = [
   { key: "wards", icon: MapPin, labelKey: "nav_wards" },
   { key: "families", icon: Home, labelKey: "nav_families" },
   { key: "members", icon: Users, labelKey: "nav_members" },
+  { key: "users", icon: KeyRound, labelKey: "nav_users" },
   { key: "announcements", icon: Megaphone, labelKey: "nav_announcements" },
   { key: "calendar", icon: CalendarDays, labelKey: "nav_calendar" },
   { key: "clergy", icon: Cross, labelKey: "nav_clergy" },

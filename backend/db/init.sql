@@ -74,11 +74,9 @@ CREATE TABLE IF NOT EXISTS families (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
-INSERT INTO families (family_name, head_of_family, ward_id, unit_number, house_name, home_address, family_photo_url, contact_number, unit_id, reg_no, email) VALUES 
-('Smith Family', 'John Smith', 1, 'A-101', 'Smith Villa', '123 Main St, Springfield', 'https://example.com/photos/smith.jpg', '555-1234', 1, 'REG-001', 'smith@example.com'),
-('Doe Family', 'Jane Doe', 2, 'B-202', 'Doe Residence', '456 Oak Ave, Springfield', 'https://example.com/photos/doe.jpg', '555-5678', 2, 'REG-002', 'doe@example.com'),
-('Ponnamattam Family', 'Benny', 3, '5', 'Ponnamattam', 'E5-225, KSHB Colony, Medical College P.O., Kozhikode - 673008', 'https://example.com/photos/ponnamattam.jpg', '555-0101', 3, 'VI-65/33', 'bennyhilarious@gmail.com')
-ON CONFLICT DO NOTHING;
+INSERT INTO families (id, family_name, head_of_family, ward_id, unit_number, house_name, home_address, family_photo_url, contact_number, unit_id, reg_no, email) VALUES 
+(1, 'Parish Family', 'Parishioner User', 1, '101', 'Parish House', 'Devagiri, Kozhikode', NULL, '+91 98450 00002', 1, 'REG-001', 'parishioner@devagiriparish.com')
+ON CONFLICT (id) DO NOTHING;
 
 CREATE TABLE IF NOT EXISTS members (
     id SERIAL PRIMARY KEY,
@@ -98,19 +96,18 @@ CREATE TABLE IF NOT EXISTS members (
     gender VARCHAR(20) DEFAULT 'MALE',
     status VARCHAR(50) DEFAULT 'active',
     sacraments TEXT[] DEFAULT '{}',
+    is_directory_visible BOOLEAN DEFAULT true,
+    role VARCHAR(50) DEFAULT 'parishioner',
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
-INSERT INTO members (family_id, first_name, last_name, phone_number, email, relationship_role, is_head_of_household, dob, dom, occupation, blood_group) VALUES 
-(1, 'John', 'Smith', '555-1234', 'john.smith@example.com', 'Husband', true, '1980-01-01', '2005-05-05', 'Engineer', 'A+'),
-(1, 'Mary', 'Smith', '555-5678', 'mary.smith@example.com', 'Wife', false, '1982-02-02', '2005-05-05', 'Teacher', 'B+'),
-(2, 'Jane', 'Doe', '555-9012', 'jane.doe@example.com', 'Wife', true, '1985-03-03', NULL, 'Doctor', 'O+'),
-(3, 'Benny', 'Ponnamattam', '555-0101', 'bennyhilarious@gmail.com', 'Husband', true, '1975-05-12', '2000-01-20', 'Engineer', 'O+'),
-(3, 'Sophia', 'Ponnamattam', '555-0102', 'sophia@example.com', 'Wife', false, '1978-08-22', '2000-01-20', 'Teacher', 'O+'),
-(3, 'Shilpa', 'Ponnamattam', '555-0103', 'shilpa@example.com', 'Daughter', false, '2002-11-05', NULL, 'Student', 'O+'),
-(3, 'Richard', 'Ponnamattam', '555-0104', 'richard@example.com', 'Son', false, '2005-04-14', NULL, 'Student', 'O+'),
-(3, 'Sandra', 'Ponnamattam', '555-0105', 'sandra@example.com', 'Daughter', false, '2008-09-30', NULL, 'Student', 'O+')
-ON CONFLICT DO NOTHING;
+ALTER TABLE members ADD COLUMN IF NOT EXISTS is_directory_visible BOOLEAN DEFAULT true;
+ALTER TABLE members ADD COLUMN IF NOT EXISTS role VARCHAR(50) DEFAULT 'parishioner';
+
+INSERT INTO members (id, family_id, first_name, last_name, phone_number, email, relationship_role, is_head_of_household, dob, dom, occupation, blood_group, is_directory_visible, role) VALUES 
+(1, 1, 'Admin', 'User', '+91 98450 00001', 'admin@devagiriparish.com', 'Administrator', false, NULL, NULL, 'Parish Priest', 'O+', false, 'admin'),
+(2, 1, 'Parishioner', 'User', '+91 98450 00002', 'parishioner@devagiriparish.com', 'Head', true, '1985-05-15', NULL, 'Parishioner', 'O+', true, 'parishioner')
+ON CONFLICT (id) DO NOTHING;
 
 CREATE TABLE IF NOT EXISTS app_users (
     id SERIAL PRIMARY KEY,
@@ -123,13 +120,9 @@ CREATE TABLE IF NOT EXISTS app_users (
 ALTER TABLE app_users DROP CONSTRAINT IF EXISTS app_users_member_id_key;
 CREATE INDEX IF NOT EXISTS idx_app_users_access_key ON app_users(access_key);
 
-INSERT INTO app_users (member_id, access_key, role) VALUES 
-(1, 'admin_secret_key_123', 'admin'),
-(1, 'parishioner_key_456', 'parishioner'),
-(1, 'access_key_admin_123', 'admin'),
-(2, 'access_key_user_456', 'parishioner'),
-(3, 'access_key_user_789', 'parishioner'),
-(4, 'access_key_user_ponnamattam', 'parishioner')
+INSERT INTO app_users (id, member_id, access_key, role) VALUES 
+(1, 1, 'admin123', 'admin'),
+(2, 2, 'user123', 'parishioner')
 ON CONFLICT (access_key) DO NOTHING;
 
 CREATE TABLE IF NOT EXISTS announcements (

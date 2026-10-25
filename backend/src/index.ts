@@ -5,6 +5,7 @@ import app from './app';
 import { connectDB, pool } from './config/db';
 import fs from 'fs';
 import path from 'path';
+import { seedDefaultUsersAndDependencies } from './scripts/seed-default-users';
 
 const port = process.env.PORT || 5000;
 
@@ -128,6 +129,9 @@ export const autoInitializeDb = async () => {
       await pool.query(initSql);
       console.log('PostgreSQL schema auto-initialization completed successfully.');
     }
+
+    // 6. Ensure exactly the default active users (admin123, user123) and isolate mock accounts
+    await seedDefaultUsersAndDependencies();
   } catch (err) {
     console.warn('Database auto-initialization notice:', err);
   }

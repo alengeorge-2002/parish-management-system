@@ -7,6 +7,7 @@ import Dashboard from "./screens/Dashboard";
 import Wards from "./screens/Wards";
 import Families from "./screens/Families";
 import Members from "./screens/Members";
+import Users from "./screens/Users";
 import Announcements from "./screens/Announcements";
 import CalendarScreen from "./screens/Calendar";
 import Clergy from "./screens/Clergy";
@@ -47,6 +48,7 @@ function Shell({ session, onLogout }: { session: UserSession; onLogout: () => vo
     wards: <Wards />,
     families: <Families />,
     members: <Members />,
+    users: <Users />,
     announcements: <Announcements />,
     calendar: <CalendarScreen />,
     clergy: <Clergy />,
@@ -60,6 +62,7 @@ function Shell({ session, onLogout }: { session: UserSession; onLogout: () => vo
     wards: "nav_wards",
     families: "nav_families",
     members: "nav_members",
+    users: "nav_users",
     announcements: "nav_announcements",
     calendar: "nav_calendar",
     clergy: "nav_clergy",

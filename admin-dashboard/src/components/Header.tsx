@@ -14,6 +14,7 @@ const crumbs: Record<Route, string> = {
   houses: "nav_houses",
   ministries: "nav_ministries",
   council: "nav_council",
+  users: "nav_users",
 };
 
 export default function Header() {

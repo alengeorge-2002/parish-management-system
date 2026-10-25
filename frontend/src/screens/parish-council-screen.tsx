@@ -27,128 +27,13 @@ interface CouncilMember {
   avatar: string;
 }
 
-const councilData: { executive: CouncilMember[]; representatives: CouncilMember[] } = {
-  executive: [
-    {
-      id: 'vicar',
-      nameKey: 'Rev. Fr. Joseph Mathew',
-      roleKey: 'role-president',
-      designationKey: 'Vicar',
-      phone: '+919845000001',
-      email: 'pp.stjosephdevagiri@gmail.com',
-      avatar: 'JM'
-    },
-    {
-      id: 'asst-vicar',
-      nameKey: 'Rev. Fr. George Varghese',
-      roleKey: 'role-vice-president',
-      designationKey: 'Associate Pastor',
-      phone: '+919845000002',
-      email: 'assoc.stjosephdevagiri@gmail.com',
-      avatar: 'GV'
-    },
-    {
-      id: 'sister-anitha',
-      nameKey: 'Sr. Anitha Thomas',
-      roleKey: 'role-sister-rep',
-      designationKey: 'School Principal',
-      phone: '+919845000003',
-      email: 'anitha.thomas@gmail.com',
-      avatar: 'AT'
-    },
-    {
-      id: 'sister-mary',
-      nameKey: 'Sr. Mary Joseph',
-      roleKey: 'role-sister-rep',
-      designationKey: 'Social Service Wing',
-      phone: '+919845000004',
-      email: 'mary.joseph@gmail.com',
-      avatar: 'MJ'
-    },
-    {
-      id: 'prof-joseph',
-      nameKey: 'prof-joseph-ka',
-      roleKey: 'role-trustee',
-      designationKey: 'role-trustee',
-      phone: '+919845000005',
-      email: 'joseph.ka@gmail.com',
-      avatar: 'JK'
-    },
-    {
-      id: 'dr-thomas',
-      nameKey: 'dr-thomas-joseph',
-      roleKey: 'role-trustee',
-      designationKey: 'role-trustee',
-      phone: '+919845000006',
-      email: 'thomas.joseph@gmail.com',
-      avatar: 'TJ'
-    },
-    {
-      id: 'adv-mary',
-      nameKey: 'adv-mary-antony',
-      roleKey: 'role-secretary',
-      designationKey: 'role-secretary',
-      phone: '+919845000007',
-      email: 'mary.antony@gmail.com',
-      avatar: 'MA'
-    }
-  ],
-  representatives: [
-    {
-      id: 'antony-kurian',
-      nameKey: 'antony-kurian',
-      roleKey: 'role-ward-rep',
-      designationKey: 'st-mary-councilor',
-      phone: '+919845000008',
-      email: 'antony.kurian@gmail.com',
-      avatar: 'AK'
-    },
-    {
-      id: 'baby-joseph',
-      nameKey: 'baby-joseph',
-      roleKey: 'role-ward-rep',
-      designationKey: 'st-sebastian-councilor',
-      phone: '+919845000009',
-      email: 'baby.joseph@gmail.com',
-      avatar: 'BJ'
-    },
-    {
-      id: 'sunny-sebastian',
-      nameKey: 'sunny-sebastian',
-      roleKey: 'role-ward-rep',
-      designationKey: 'st-joseph-councilor',
-      phone: '+919845000010',
-      email: 'sunny.sebastian@gmail.com',
-      avatar: 'SS'
-    },
-    {
-      id: 'mini-mathew',
-      nameKey: 'mini-mathew',
-      roleKey: 'role-ward-rep',
-      designationKey: 'lourdes-councilor',
-      phone: '+919845000011',
-      email: 'mini.mathew@gmail.com',
-      avatar: 'MM'
-    },
-    {
-      id: 'george-mathew',
-      nameKey: 'george-mathew',
-      roleKey: 'role-ward-rep',
-      designationKey: 'st-thomas-councilor',
-      phone: '+919845000012',
-      email: 'george.mathew@gmail.com',
-      avatar: 'GM'
-    }
-  ]
-};
-
 export default function ParishCouncilScreen() {
   const { colors, isDark } = useTheme();
   const styles = getStyles(colors, isDark);
   const { t } = useLanguage();
   const navigation = useNavigation();
   const [activeTab, setActiveTab] = useState<'representatives' | 'executive'>('representatives');
-  const [liveCouncilData, setLiveCouncilData] = useState<{ executive: CouncilMember[]; representatives: CouncilMember[] }>(councilData);
+  const [liveCouncilData, setLiveCouncilData] = useState<{ executive: CouncilMember[]; representatives: CouncilMember[] }>({ executive: [], representatives: [] });
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -157,7 +42,7 @@ export default function ParishCouncilScreen() {
         const response = await apiFetch(`${API_BASE_URL}/api/directory/parish-council`);
         if (response.ok) {
           const list: any[] = await response.json();
-          if (Array.isArray(list) && list.length > 0) {
+          if (Array.isArray(list)) {
             const getInitials = (name: string) => {
               const cleaned = name.replace(/^(Rev\.\s+Fr\.|Fr\.|Sr\.|Br\.)\s+/i, '');
               const parts = cleaned.trim().split(/\s+/);
@@ -171,18 +56,20 @@ export default function ParishCouncilScreen() {
             const representatives: CouncilMember[] = [];
 
             list.forEach(item => {
-              const fullName = `${item.first_name} ${item.last_name}`;
+              const firstName = item.first_name || item.firstName || '';
+              const lastName = item.last_name || item.lastName || '';
+              const fullName = `${firstName} ${lastName}`.trim() || item.occupantName || item.holder || 'Council Member';
               const member: CouncilMember = {
-                id: item.id.toString(),
+                id: (item.id || item._id || '').toString(),
                 nameKey: fullName,
-                roleKey: item.role_title,
-                designationKey: item.role_title,
-                phone: item.phone_number || '',
+                roleKey: item.role_title || item.roleTitle || item.seat || 'Council Member',
+                designationKey: item.role_title || item.roleTitle || item.seat || 'Council Member',
+                phone: item.phone_number || item.phone || '',
                 email: item.email || '',
                 avatar: getInitials(fullName)
               };
 
-              if (item.committee_type === 'executive') {
+              if (item.committee_type === 'executive' || item.category === 'Executive') {
                 executive.push(member);
               } else {
                 representatives.push(member);
@@ -193,7 +80,8 @@ export default function ParishCouncilScreen() {
           }
         }
       } catch (error) {
-        console.warn('Failed to load dynamic council data, using fallbacks:', error);
+        console.warn('Failed to load dynamic council data:', error);
+        setLiveCouncilData({ executive: [], representatives: [] });
       } finally {
         setLoading(false);
       }

@@ -3,7 +3,6 @@ import { Plus, Phone, Users, Pencil, Trash2, Church, X, Building, Calendar, Mail
 import { Card, Pill, Button, IconButton } from "../components/ui";
 import { HouseModal } from "../components/modals";
 import { useApp } from "../lib/app-context";
-import { RELIGIOUS_HOUSES } from "../lib/data";
 import { religiousHousesApi } from "../utils/api-client";
 import { getMemberAvatar } from "../utils/getMemberAvatar";
 
@@ -15,36 +14,12 @@ const typeTone: Record<string, "gold" | "blue" | "violet"> = {
   Congregation: "gold",
 };
 
-const DEFAULT_RESIDENTS_BY_TYPE: Record<string, any[]> = {
-  Convent: [
-    { fullName: "Sr. Little Rose CMC", religiousName: "Sr. Little Rose CMC", designation: "Mother Superior", phone: "+91 94470 71001", email: "superior.carmel@devagiri.org", gender: "F", feastDay: "October 1" },
-    { fullName: "Sr. Mary Joseph CMC", religiousName: "Sr. Mary Joseph CMC", designation: "Vice Superior", phone: "+91 94470 71005", email: "mary.j@devagiri.org", gender: "F", feastDay: "March 19" },
-    { fullName: "Sr. Anitha Thomas CMC", religiousName: "Sr. Anitha Thomas CMC", designation: "School Principal", phone: "+91 94470 71008", email: "anitha.t@devagiri.org", gender: "F", feastDay: "July 3" },
-    { fullName: "Sr. Teresa Mundackal CMC", religiousName: "Sr. Teresa Mundackal CMC", designation: "Counselor", phone: "+91 94470 44051", email: "teresa.m@devagiri.org", gender: "F", feastDay: "October 15" },
-    { fullName: "Sr. Grace Maria CMC", religiousName: "Sr. Grace Maria CMC", designation: "Health Administrator", phone: "+91 94470 71012", email: "grace.m@devagiri.org", gender: "F", feastDay: "August 15" },
-  ],
-  Monastery: [
-    { fullName: "Fr. Bonaventure OFM", religiousName: "Fr. Bonaventure OFM", designation: "Guardian / Superior", phone: "+91 94470 71002", email: "bonaventure@devagiri.org", gender: "M", feastDay: "July 15" },
-    { fullName: "Fr. George Varghese OFM", religiousName: "Fr. George Varghese OFM", designation: "Vicar / Assistant", phone: "+91 94470 71006", email: "george.v@devagiri.org", gender: "M", feastDay: "April 23" },
-    { fullName: "Fr. Mathew Kalapurackal OFM", religiousName: "Fr. Mathew Kalapurackal OFM", designation: "Formator", phone: "+91 94470 71009", email: "mathew.k@devagiri.org", gender: "M", feastDay: "September 21" },
-    { fullName: "Br. Antony Puthur OFM", religiousName: "Br. Antony Puthur OFM", designation: "Sacristan", phone: "+91 94470 71014", email: "antony.p@devagiri.org", gender: "M", feastDay: "June 13" },
-  ],
-  "Formation House": [
-    { fullName: "Sr. Christy SABS", religiousName: "Sr. Christy SABS", designation: "Directress of Formees", phone: "+91 94470 71003", email: "christy.sabs@devagiri.org", gender: "F", feastDay: "December 25" },
-    { fullName: "Sr. Rosamma Edathil SABS", religiousName: "Sr. Rosamma Edathil SABS", designation: "Assistant Directress", phone: "+91 94470 66309", email: "rosamma.e@devagiri.org", gender: "F", feastDay: "August 23" },
-    { fullName: "Sr. Anna Kizhakkel SABS", religiousName: "Sr. Anna Kizhakkel SABS", designation: "Spiritual Guide", phone: "+91 94470 88402", email: "anna.k@devagiri.org", gender: "F", feastDay: "July 26" },
-    { fullName: "Sr. Philomena SABS", religiousName: "Sr. Philomena SABS", designation: "Administrator", phone: "+91 94470 71017", email: "philomena@devagiri.org", gender: "F", feastDay: "August 11" },
-    { fullName: "Sr. Alphonsa SABS", religiousName: "Sr. Alphonsa SABS", designation: "Novice Sister", phone: "+91 94470 71018", email: "alphonsa@devagiri.org", gender: "F", feastDay: "July 28" },
-    { fullName: "Sr. Rita Maria SABS", religiousName: "Sr. Rita Maria SABS", designation: "Novice Sister", phone: "+91 94470 71019", email: "rita@devagiri.org", gender: "F", feastDay: "May 22" },
-  ],
-};
-
 export default function Houses() {
   const { lang, toast } = useApp();
   const [q, setQ] = useState("");
   const [modal, setModal] = useState(false);
   const [editingHouse, setEditingHouse] = useState<any>(null);
-  const [housesList, setHousesList] = useState<any[]>(RELIGIOUS_HOUSES);
+  const [housesList, setHousesList] = useState<any[]>([]);
 
   // Fullscreen Details Modal State
   const [activeHouseDetails, setActiveHouseDetails] = useState<any | null>(null);
@@ -66,12 +41,11 @@ export default function Houses() {
   const loadData = async () => {
     try {
       const data = await religiousHousesApi.list();
-      if (Array.isArray(data) && data.length > 0) {
+      if (Array.isArray(data)) {
         setHousesList(
           data.map((h: any) => {
             const cat = h.category || h.type || "Convent";
-            const defaults = DEFAULT_RESIDENTS_BY_TYPE[cat] || DEFAULT_RESIDENTS_BY_TYPE["Convent"];
-            const resList = Array.isArray(h.residents) && h.residents.length > 0 ? h.residents : defaults;
+            const resList = Array.isArray(h.residents) ? h.residents : [];
             return {
               id: h.id || h._id,
               _id: h._id || h.id,
@@ -80,11 +54,11 @@ export default function Houses() {
               type: cat,
               congregation: h.category || cat || "Congregation",
               superior: h.superiorInCharge || h.superior || "Sr. Superior",
-              established: h.established || "1980",
+              established: h.established || "",
               members: resList.length,
-              phone: h.contactNumber || h.phone || "+91 98765 43210",
-              address: h.address || "Devagiri, Kozhikode",
-              image: h.photoUrl || h.image || "https://images.unsplash.com/photo-1548625361-185871b6920d?w=600&h=350&fit=crop&auto=format",
+              phone: h.contactNumber || h.phone || "",
+              address: h.address || "",
+              image: h.photoUrl || h.image || "",
               residents: resList,
               raw: h,
             };
@@ -92,7 +66,7 @@ export default function Houses() {
         );
       }
     } catch (e) {
-      console.warn("[Houses] API fetch fallback to seed data:", e);
+      console.error("[Houses] API fetch error:", e);
     }
   };
 
@@ -105,15 +79,9 @@ export default function Houses() {
   );
 
   const handleOpenHouseDetails = (house: any) => {
-    const cat = house.type || house.category || "Convent";
-    const defaults = DEFAULT_RESIDENTS_BY_TYPE[cat] || DEFAULT_RESIDENTS_BY_TYPE["Convent"];
-    const resList = Array.isArray(house.residents) && house.residents.length > 0
-      ? house.residents
-      : defaults;
-
     setActiveHouseDetails({
       ...house,
-      residents: resList,
+      residents: Array.isArray(house.residents) ? house.residents : [],
     });
   };
 

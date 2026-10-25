@@ -7,6 +7,7 @@ export type Route =
   | "wards"
   | "families"
   | "members"
+  | "users"
   | "announcements"
   | "calendar"
   | "clergy"
@@ -39,7 +40,16 @@ const Ctx = createContext<AppState | null>(null);
 export function AppProvider({ children }: { children: React.ReactNode }) {
   const [lang, setLang] = useState<Lang>("en");
   const [theme, setTheme] = useState<"dark" | "light">("dark");
-  const [route, setRoute] = useState<Route>("dashboard");
+  const getInitialRoute = (): Route => {
+    if (typeof window !== "undefined") {
+      const p = window.location.pathname.replace(/^\//, "").toLowerCase();
+      if (p === "users") return "users";
+      const hash = window.location.hash.replace(/^#\/?/, "").toLowerCase();
+      if (hash === "users") return "users";
+    }
+    return "dashboard";
+  };
+  const [route, setRoute] = useState<Route>(getInitialRoute);
   const [selectedWardFilter, setSelectedWardFilter] = useState<string>("");
   const [toasts, setToasts] = useState<Toast[]>([]);
 

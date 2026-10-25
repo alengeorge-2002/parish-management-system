@@ -34,7 +34,7 @@ export const getAllUsers = async (_req: Request, res: Response) => {
   try {
     const result = await pool.query(
       `SELECT u.id, u.member_id, u.role, u.access_key,
-              m.first_name, m.last_name
+              m.first_name, m.last_name, m.email
        FROM app_users u
        LEFT JOIN members m ON u.member_id = m.id
        ORDER BY u.id ASC`
@@ -45,8 +45,11 @@ export const getAllUsers = async (_req: Request, res: Response) => {
       member_id: u.member_id ? String(u.member_id) : null,
       role: u.role,
       access_key: u.access_key,
-      first_name: u.first_name || '',
-      last_name: u.last_name || '',
+      accessKey: u.access_key,
+      first_name: u.first_name || (u.role === 'admin' ? 'Admin' : 'Parishioner'),
+      last_name: u.last_name || 'User',
+      email: u.email || (u.role === 'admin' ? 'admin@devagiriparish.com' : 'parishioner@devagiriparish.com'),
+      status: 'active',
     }));
     res.json(mapped);
   } catch (error: any) {
@@ -734,12 +737,17 @@ export const createMember = async (req: Request, res: Response) => {
     const rel = relationshipToHead || relationshipRole || relationship_role || relation_to_head || 'Member';
     const head = isHeadOfHousehold !== undefined ? Boolean(isHeadOfHousehold) : Boolean(is_head_of_household);
 
+    const isDirVisible = req.body.isDirectoryVisible !== undefined 
+      ? Boolean(req.body.isDirectoryVisible) 
+      : (req.body.is_directory_visible !== undefined ? Boolean(req.body.is_directory_visible) : true);
+    const mRole = req.body.role || 'parishioner';
+
     const result = await pool.query(
       `INSERT INTO members (
          family_id, first_name, last_name, phone_number, email,
          relationship_role, is_head_of_household, dob, dom, occupation, blood_group,
-         malayalam_name, baptism_name, gender, status, sacraments
-       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
+         malayalam_name, baptism_name, gender, status, sacraments, is_directory_visible, role
+       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
        RETURNING *`,
       [
         famId, fName || 'Member', lName || '',
@@ -751,7 +759,9 @@ export const createMember = async (req: Request, res: Response) => {
         malayalamName || malayalam_name || nameMl || null,
         baptismName || baptism_name || null,
         gender || 'MALE', status || 'active',
-        Array.isArray(sacraments) ? sacraments : []
+        Array.isArray(sacraments) ? sacraments : [],
+        isDirVisible,
+        mRole
       ]
     );
 

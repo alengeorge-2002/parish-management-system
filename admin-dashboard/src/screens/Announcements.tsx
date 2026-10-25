@@ -2,25 +2,25 @@ import { useEffect, useState } from "react";
 import { Plus, Megaphone, Calendar as CalIcon, Pencil, Trash2 } from "lucide-react";
 import { Card, Pill, Button, Toggle, IconButton, Modal, Field, Input } from "../components/ui";
 import { useApp } from "../lib/app-context";
-import { BULLETINS, type Bulletin } from "../lib/data";
+import { type Bulletin } from "../lib/data";
 import { announcementsApi } from "../utils/api-client";
 
 export default function Announcements() {
   const { tt, toast } = useApp();
-  const [items, setItems] = useState<any[]>(BULLETINS);
+  const [items, setItems] = useState<any[]>([]);
   const [modal, setModal] = useState(false);
   const [editingItem, setEditingItem] = useState<any>(null);
 
   const loadData = async () => {
     try {
       const data = await announcementsApi.list();
-      if (Array.isArray(data) && data.length > 0) {
+      if (Array.isArray(data)) {
         setItems(
           data.map((b: any) => ({
             id: b.id || b._id,
             title: b.title || "Parish Announcement",
-            excerpt: b.content || b.description || "Important announcement for all parishioners.",
-            date: b.createdAt ? new Date(b.createdAt).toLocaleDateString() : "2026-03-19",
+            excerpt: b.content || b.description || "",
+            date: b.createdAt ? new Date(b.createdAt).toLocaleDateString() : "",
             status: b.isActive === false || b.status === "draft" ? "draft" : "active",
             priority: b.priority || "normal",
             raw: b,
@@ -28,7 +28,7 @@ export default function Announcements() {
         );
       }
     } catch (e) {
-      console.warn("[Announcements] API fetch fallback to seed data:", e);
+      console.error("[Announcements] API fetch error:", e);
     }
   };
 

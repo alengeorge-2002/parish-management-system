@@ -13,12 +13,12 @@ import {
 import { Card, Pill, Button, Select, IconButton } from "../components/ui";
 import { FamilyModal, FamilyDetailsModal } from "../components/modals";
 import { useApp } from "../lib/app-context";
-import { FAMILIES, WARDS, type Family } from "../lib/data";
+import { type Family } from "../lib/data";
 import { getMemberAvatar } from "../utils/getMemberAvatar";
 import { familiesApi, wardsApi, membersApi } from "../utils/api-client";
 
 function AvatarStack({ family, onClick }: { family: any; onClick?: () => void }) {
-  const memberCount = family.memberCount || 4;
+  const memberCount = family.memberCount || 0;
   const avatars = [
     getMemberAvatar({ gender: "male", familyPhoto: family.familyPhotoUrl || family.banner }),
     getMemberAvatar({ gender: "female", familyPhoto: family.familyPhotoUrl || family.banner }),
@@ -64,8 +64,8 @@ export default function Families() {
   const [loadingMembers, setLoadingMembers] = useState(false);
   const [detailsModalOpen, setDetailsModalOpen] = useState(false);
 
-  const [familiesList, setFamiliesList] = useState<any[]>(FAMILIES);
-  const [wardsList, setWardsList] = useState<any[]>(WARDS);
+  const [familiesList, setFamiliesList] = useState<any[]>([]);
+  const [wardsList, setWardsList] = useState<any[]>([]);
   const [membersList, setMembersList] = useState<any[]>([]);
 
   const handleOpenFamilyDetails = async (f: any) => {
@@ -120,19 +120,19 @@ export default function Families() {
         membersApi.list(),
       ]);
 
-      if (Array.isArray(familiesData) && familiesData.length > 0) {
+      if (Array.isArray(familiesData)) {
         setFamiliesList(
           familiesData.map((f: any) => {
             const wardObj = typeof f.ward === 'object' ? f.ward : (typeof f.wardId === 'object' ? f.wardId : (typeof f.ward_id === 'object' ? f.ward_id : null));
-            const wardNum = f.wardNumber || f.ward_number || wardObj?.ward_number || wardObj?.wardNumber || (typeof f.ward === 'number' || typeof f.ward === 'string' ? f.ward : 1);
-            const wardName = f.wardName || f.ward_name || wardObj?.ward_name || wardObj?.wardName || f.wardPatron || "St. Mary";
-            const unitName = f.unit || f.unit_number || f.unitNumber || "Unit I";
-            const headName = typeof f.headOfFamily === 'object' ? (f.headOfFamily?.first_name ? `${f.headOfFamily.first_name} ${f.headOfFamily.last_name || ''}` : f.headOfFamily?.full_name || f.headOfFamily?.fullName || f.headOfFamily?.name || "Family Head") : (typeof f.head_of_family === 'object' ? (f.head_of_family?.full_name || f.head_of_family?.fullName || f.head_of_family?.name || "Family Head") : (f.headOfFamily || f.head_of_family || f.head || "Family Head"));
-            const houseName = typeof f.houseName === 'object' ? (f.houseName?.house_name || f.houseName?.familyName || "Household") : (typeof f.house_name === 'object' ? (f.house_name?.house_name || "Household") : (f.familyName || f.houseName || f.house_name || f.house || "Parish Household"));
-            const phoneNum = typeof f.contactNumber === 'object' ? (f.contactNumber?.phone || "") : (typeof f.contact_number === 'object' ? (f.contact_number?.phone || "") : (f.phone || f.contactNumber || f.contact_number || "+91 98765 43210"));
+            const wardNum = f.wardNumber || f.ward_number || wardObj?.ward_number || wardObj?.wardNumber || (typeof f.ward === 'number' || typeof f.ward === 'string' ? f.ward : "");
+            const wardName = f.wardName || f.ward_name || wardObj?.ward_name || wardObj?.wardName || f.wardPatron || "";
+            const unitName = f.unit || f.unit_number || f.unitNumber || "";
+            const headName = typeof f.headOfFamily === 'object' ? (f.headOfFamily?.first_name ? `${f.headOfFamily.first_name} ${f.headOfFamily.last_name || ''}`.trim() : f.headOfFamily?.full_name || f.headOfFamily?.fullName || f.headOfFamily?.name || "") : (typeof f.head_of_family === 'object' ? (f.head_of_family?.full_name || f.head_of_family?.fullName || f.head_of_family?.name || "") : (f.headOfFamily || f.head_of_family || f.head || ""));
+            const houseName = typeof f.houseName === 'object' ? (f.houseName?.house_name || f.houseName?.familyName || "") : (typeof f.house_name === 'object' ? (f.house_name?.house_name || "") : (f.familyName || f.houseName || f.house_name || f.house || ""));
+            const phoneNum = typeof f.contactNumber === 'object' ? (f.contactNumber?.phone || "") : (typeof f.contact_number === 'object' ? (f.contact_number?.phone || "") : (f.phone || f.contactNumber || f.contact_number || ""));
 
             return {
-              id: typeof f.id === 'object' ? (f.id?._id || String(f.id)) : (f.id || f._id || "F-100"),
+              id: typeof f.id === 'object' ? (f.id?._id || String(f.id)) : (f.id || f._id || ""),
               house: houseName,
               head: headName,
               ward: wardNum,
@@ -140,29 +140,25 @@ export default function Families() {
               wardName: wardName,
               unit: unitName,
               unitNumber: unitName,
-              wardId: f.wardId || f.ward_id || f.ward || wardNum || 1,
+              wardId: f.wardId || f.ward_id || f.ward || wardNum || "",
               wardPatron: wardName,
               phone: phoneNum,
-              memberCount: f.memberCount || 4,
-              banner: f.familyPhotoUrl || f.family_photo_url || f.banner || "https://images.unsplash.com/photo-1511895426328-dc8714191300?w=600&h=350&fit=crop&auto=format",
-              avatars: [
-                "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=80&h=80&fit=crop&auto=format",
-                "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=80&h=80&fit=crop&auto=format",
-                "https://images.unsplash.com/photo-1539571696357-5a69c17a67c6?w=80&h=80&fit=crop&auto=format",
-              ],
+              memberCount: f.memberCount || f.member_count || 0,
+              banner: f.familyPhotoUrl || f.family_photo_url || f.banner || "",
+              avatars: [],
               raw: f,
             };
           })
         );
       }
-      if (Array.isArray(wardsData) && wardsData.length > 0) {
+      if (Array.isArray(wardsData)) {
         setWardsList(wardsData);
       }
-      if (Array.isArray(membersData) && membersData.length > 0) {
+      if (Array.isArray(membersData)) {
         setMembersList(membersData);
       }
     } catch (e) {
-      console.warn("[Families] API fetch fallback to seed data:", e);
+      console.error("[Families] API fetch error:", e);
     }
   };
 

@@ -153,114 +153,12 @@ export const normalizeReadings = (readingsRaw: any, readingsEnRaw?: any, reading
   return result;
 };
 
-const fallbackFeasts = [
-  {
-    id: 1,
-    title_en: "Sacred Heart of Jesus — Novena Begins",
-    title_ml: "ഈശോയുടെ തിരുഹൃദയ നൊവേന ആരംഭം",
-    target_date: "2026-06-07",
-    mass_time: "6:00 AM Daily",
-    type_badge: "Novena",
-    location: "Main Sanctuary",
-    description_en: "Nine days of devotion to the Sacred Heart of Jesus. All are welcome to participate in this powerful novena.",
-    description_ml: "നൊവേന പ്രാർത്ഥനകൾ എല്ലാ ദിവസവും രാവിലെ 6 മണിക്ക് നടക്കും."
-  },
-  {
-    id: 2,
-    title_en: "Feast of St Anthony",
-    title_ml: "വിശുദ്ധ അന്തോണീസിന്റെ തിരുനാൾ",
-    target_date: "2026-06-13",
-    mass_time: "6:00 AM & 7:00 AM & 6:00 PM",
-    type_badge: "Feast",
-    location: "Main Sanctuary",
-    description_en: "Patron Saint Feast of our community with solemn holy mass and distribution of bread.",
-    description_ml: "അപ്പത്തിന്റെ ആശീർവാദവും വിതരണവും തിരുനാൾ കുർബാനയ്ക്കു ശേഷം ഉണ്ടായിരിക്കും."
-  },
-  {
-    id: 3,
-    title_en: "Corpus Christi Procession",
-    title_ml: "വിശുദ്ധ കുർബാനയുടെ പ്രദിക്ഷണം",
-    target_date: "2026-06-14",
-    mass_time: "6:30 PM",
-    type_badge: "Feast",
-    location: "Main Sanctuary",
-    description_en: "Solemn Procession around the parish grounds immediately following the Solemn High Mass.",
-    description_ml: "തിരുനാൾ കുർബാനയെ തുടർന്ന് ഇടവക അതിർത്തികളിൽ പ്രദക്ഷിണം ഉണ്ടായിരിക്കും."
-  },
-  {
-    id: 4,
-    title_en: "Youth Fellowship",
-    title_ml: "യുവജന സഖ്യം കൂട്ടായ്മ",
-    target_date: "2026-06-22",
-    mass_time: "6:30 PM",
-    type_badge: "Event",
-    location: "Parish Hall",
-    description_en: "Praise, worship, and fellowship for the teenagers and youth of our parish.",
-    description_ml: "പാരീഷ് ഹാളിൽ വച്ച് യുവജനങ്ങളുടെ സ്തുതിപ്പും ആരാധനയും."
-  },
-  {
-    id: 5,
-    title_en: "Feast of Sts. Peter & Paul",
-    title_ml: "വിശുദ്ധ പത്രോസ് ശ്ലീഹായുടെയും പൗലോസ് ശ്ലീഹായുടെയും തിരുനാൾ",
-    target_date: "2026-06-29",
-    mass_time: "06:00 AM, 07:00 AM",
-    type_badge: "Feast",
-    location: "Main Sanctuary",
-    description_en: "Solemn liturgy celebrating the life and martyrdom of the Apostles Peter and Paul.",
-    description_ml: "ശ്ലീഹന്മാരുടെ ഓർമ്മ തിരുനാൾ ആഘോഷങ്ങൾ."
-  },
-  {
-    id: 6,
-    title_en: "Feast of St. Joseph (Parish Patron)",
-    title_ml: "മാർ യൗസേപ്പിന്റെ പ്രധാന തിരുനാൾ",
-    target_date: "2026-03-19",
-    mass_time: "6:30 AM & 10:00 AM",
-    type_badge: "Feast",
-    location: "Main Sanctuary",
-    description_en: "Patron Feast Day celebration with solemn high mass and community feast meal.",
-    description_ml: "ഇടവക മധ്യസ്ഥനായ വിശുദ്ധ യൗസേപ്പിതാവിന്റെ ആഘോഷമായ തിരുനാൾ ബലി."
-  },
-  {
-    id: 7,
-    title_en: "Rosary Month Solemn Devotion & Procession",
-    title_ml: "ജപമാല മാസ സമാപന പ്രദക്ഷിണം",
-    target_date: "2026-10-14",
-    mass_time: "6:30 PM",
-    type_badge: "Event",
-    location: "Grotto & Parish Grounds",
-    description_en: "Solemn Holy Rosary devotion, candlelight procession, and benediction.",
-    description_ml: "പരിശുദ്ധ ജപമാല സമർപ്പണവും മെഴുകുതിരി പ്രദക്ഷിണവും ദിവ്യകാരുണ്യ ആശീർവാദവും."
-  },
-  {
-    id: 8,
-    title_en: "Feast of St. Teresa of Avila",
-    title_ml: "വിശുദ്ധ അമ്മത്രേസ്യായുടെ തിരുനാൾ",
-    target_date: "2026-10-15",
-    mass_time: "6:30 AM & 6:00 PM",
-    type_badge: "Feast",
-    location: "Main Sanctuary",
-    description_en: "Solemn Feast of St. Teresa of Avila, Doctor of the Church.",
-    description_ml: "വേദപാരംഗതയായ വിശുദ്ധ അമ്മത്രേസ്യായുടെ തിരുനാൾ ആഘോഷം."
-  },
-  {
-    id: 9,
-    title_en: "Parish Assembly & Family Unit Meet",
-    title_ml: "ഇടവക പൊതുയോഗം & കുടുംബ കൂട്ടായ്മ",
-    target_date: "2026-10-25",
-    mass_time: "11:30 AM",
-    type_badge: "Event",
-    location: "Parish Hall",
-    description_en: "General body meeting of all parishioners and ward unit leaders.",
-    description_ml: "എല്ലാ ഇടവകാംഗങ്ങളുടെയും കുടുംബ യൂണിറ്റ് ഭാരവാഹികളുടെയും സംയുക്ത പൊതുയോഗം."
-  }
-];
-
 export default function FeastCalendarScreen({ navigation }: any) {
   const { colors, isDark } = useTheme();
   const styles = getStyles(colors, isDark);
   const { t: originalT } = useLanguage();
   
-  const [feasts, setFeasts] = useState<any[]>(fallbackFeasts);
+  const [feasts, setFeasts] = useState<any[]>([]);
   const [calendarDataMap, setCalendarDataMap] = useState<Record<string, any>>({});
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -350,13 +248,13 @@ export default function FeastCalendarScreen({ navigation }: any) {
               : (Array.isArray(data?.data) 
                   ? data.data 
                   : []));
-        setFeasts(eventList.length > 0 ? eventList : fallbackFeasts);
+        setFeasts(eventList);
       } else {
-        throw new Error('Events API error');
+        setFeasts([]);
       }
     } catch (error) {
-      console.warn('Backend offline or events API unavailable, using fallback feast data.', error);
-      setFeasts(fallbackFeasts);
+      console.warn('Backend offline or events API unavailable:', error);
+      setFeasts([]);
     }
 
     // 2. Fetch Liturgical Calendar / Readings API with fallback

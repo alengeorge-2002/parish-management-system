@@ -29,26 +29,7 @@ export default function DirectoryScreen() {
   const [ministriesData, setMinistriesData] = useState<any[]>([]);
   const [selectedMinistryId, setSelectedMinistryId] = useState<number | null>(null);
   const [parishCouncilList, setParishCouncilList] = useState<any[]>([]);
-  const [quickContacts, setQuickContacts] = useState<any[]>([
-    {
-      role_title: 'Vicar',
-      name: 'Rev. Fr. Joseph Mathew',
-      phone_number: '+919845000001',
-      email: 'pp.stjosephdevagiri@gmail.com'
-    },
-    {
-      role_title: 'Assistant Vicar',
-      name: 'Rev. Fr. George Varghese',
-      phone_number: '+919845000002',
-      email: 'assoc.stjosephdevagiri@gmail.com'
-    },
-    {
-      role_title: 'Parish Secretary',
-      name: 'Adv. Mary Antony',
-      phone_number: '+914952701234',
-      email: 'mary.antony@gmail.com'
-    }
-  ]);
+  const [quickContacts, setQuickContacts] = useState<any[]>([]);
 
   useEffect(() => {
     const fetchDirectoryData = async () => {
@@ -61,19 +42,19 @@ export default function DirectoryScreen() {
 
       try {
         const [familiesRes, wardsRes, membersRes, clergyRes, housesRes, ministriesRes, councilRes, quickContactsRes] = await Promise.all([
-          apiFetch(`${API_BASE_URL}/api/admin/families`, {
+          apiFetch(`${API_BASE_URL}/api/directory/families`, {
             headers: { 
               'Authorization': token ? `Bearer ${token}` : '',
               'Content-Type': 'application/json'
             }
           }),
-          apiFetch(`${API_BASE_URL}/api/admin/wards`, {
+          apiFetch(`${API_BASE_URL}/api/directory/wards`, {
             headers: { 
               'Authorization': token ? `Bearer ${token}` : '',
               'Content-Type': 'application/json'
             }
           }),
-          apiFetch(`${API_BASE_URL}/api/admin/members`, {
+          apiFetch(`${API_BASE_URL}/api/directory`, {
             headers: { 
               'Authorization': token ? `Bearer ${token}` : '',
               'Content-Type': 'application/json'
@@ -157,36 +138,38 @@ export default function DirectoryScreen() {
           setQuickContacts(Array.isArray(contactsList) ? contactsList : []);
         }
 
-        // Only map families, members, and wards if all three are returned successfully (typically for admin roles)
-        if (familiesRes.ok && wardsRes.ok && membersRes.ok) {
-          const [rawFamilies, rawWardsList, rawMembersList] = await Promise.all([
-            familiesRes.json(),
-            wardsRes.json(),
-            membersRes.json()
-          ]);
-
-          const families = Array.isArray(rawFamilies) ? rawFamilies : [];
-          const wardsList = Array.isArray(rawWardsList) ? rawWardsList : [];
-          const membersList = Array.isArray(rawMembersList) ? rawMembersList : [];
-
+        if (membersRes && membersRes.ok) {
+          const rawMembersData = await membersRes.json();
+          const membersList = Array.isArray(rawMembersData)
+            ? rawMembersData
+            : (Array.isArray(rawMembersData?.results) ? rawMembersData.results : (Array.isArray(rawMembersData?.members) ? rawMembersData.members : []));
           setMembersData(membersList);
+        }
+
+        let wardsList: any[] = [];
+        if (wardsRes && wardsRes.ok) {
+          const rawWardsList = await wardsRes.json();
+          wardsList = Array.isArray(rawWardsList) ? rawWardsList : [];
+          const uniqueWards = ["All", ...wardsList.map((w: any) => w.ward_name || w.wardName).filter(Boolean)];
+          setWards(uniqueWards);
+        }
+
+        if (familiesRes && familiesRes.ok) {
+          const rawFamilies = await familiesRes.json();
+          const families = Array.isArray(rawFamilies) ? rawFamilies : [];
 
           const wardMap = new Map<string, string>();
           wardsList.forEach((w: any) => {
             const wId = String(w._id || w.id || '');
-            if (wId) wardMap.set(wId, w.ward_name);
+            if (wId) wardMap.set(wId, w.ward_name || w.wardName);
           });
-
-          // Dynamically set the wards list from database
-          const uniqueWards = ["All", ...wardsList.map((w: any) => w.ward_name).filter(Boolean)];
-          setWards(uniqueWards);
 
           const mappedFamilies = families.map((fam: any) => {
             const wardIdVal = fam.ward_id || fam.ward;
             const wardObj = typeof fam.ward === 'object' ? fam.ward : (typeof fam.ward_id === 'object' ? fam.ward_id : null);
             const rawIdKey = String(wardIdVal?._id || wardIdVal || '');
             const wardNameLookup = rawIdKey ? wardMap.get(rawIdKey) : null;
-            const wardName = wardNameLookup || wardObj?.ward_name || fam.ward_name || '';
+            const wardName = wardNameLookup || wardObj?.ward_name || wardObj?.wardName || fam.ward_name || fam.wardName || '';
 
             const houseNameVal = fam.house_name ? fam.house_name.trim() : (fam.family_name ? fam.family_name.trim() : '');
             const unitNumVal = fam.unit_number ? fam.unit_number.toString().trim() : '';
@@ -195,7 +178,7 @@ export default function DirectoryScreen() {
             return {
               id: fam._id || fam.id,
               familyName: fam.family_name || fam.house_name || 'Unnamed Family',
-              headOfFamily: fam.head_of_family || '',
+              headOfFamily: fam.head_of_family || fam.headOfFamily || '',
               houseName: houseNameVal || fam.family_name || 'Household',
               homeAddress: finalAddress,
               unitNumber: unitNumVal,
@@ -204,7 +187,7 @@ export default function DirectoryScreen() {
               photoUrl: fam.family_photo_url && fam.family_photo_url.startsWith('/uploads') 
                 ? `${API_BASE_URL}${fam.family_photo_url}` 
                 : (fam.family_photo_url || ''),
-              contactNumber: fam.contact_number || '',
+              contactNumber: fam.contact_number || fam.contactNumber || '',
               email: fam.email || ''
             };
           });
@@ -323,9 +306,9 @@ export default function DirectoryScreen() {
 
       // 2. Member match via sub-array loop
       const matchingMembers = membersData.filter(m => {
-        if (m.family_id !== fam.id) return false;
-        const firstName = (m.first_name || '').toLowerCase().trim();
-        const lastName = (m.last_name || '').toLowerCase().trim();
+        if (String(m.family_id || m.familyId) !== String(fam.id)) return false;
+        const firstName = (m.first_name || m.firstName || '').toLowerCase().trim();
+        const lastName = (m.last_name || m.lastName || '').toLowerCase().trim();
         const fullName = `${firstName} ${lastName}`.trim();
         return firstName.includes(lowerQuery) || 
                lastName.includes(lowerQuery) || 
@@ -366,9 +349,9 @@ export default function DirectoryScreen() {
       const houseMatches = fam.houseName.toLowerCase().includes(lowerQuery);
 
       const matchingMembers = membersData.filter(m => {
-        if (m.family_id !== fam.id) return false;
-        const firstName = (m.first_name || '').toLowerCase().trim();
-        const lastName = (m.last_name || '').toLowerCase().trim();
+        if (String(m.family_id || m.familyId) !== String(fam.id)) return false;
+        const firstName = (m.first_name || m.firstName || '').toLowerCase().trim();
+        const lastName = (m.last_name || m.lastName || '').toLowerCase().trim();
         const fullName = `${firstName} ${lastName}`.trim();
         return firstName.includes(lowerQuery) || 
                lastName.includes(lowerQuery) || 

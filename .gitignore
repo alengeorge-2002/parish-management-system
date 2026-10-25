@@ -78,3 +78,7 @@ ehthumbs.db
 *.njsproj
 *.sln
 *.sw?
+
+backend/pgdisk.img
+*.img
+

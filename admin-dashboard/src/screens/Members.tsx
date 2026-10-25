@@ -25,7 +25,7 @@ import {
 } from "../components/ui";
 import { MemberModal } from "../components/modals";
 import { useApp } from "../lib/app-context";
-import { MEMBERS, WARDS, BLOOD_GROUPS, type Sacrament } from "../lib/data";
+import { BLOOD_GROUPS, type Sacrament } from "../lib/data";
 import { membersApi, wardsApi, familiesApi } from "../utils/api-client";
 import getMemberAvatar from "../utils/getMemberAvatar";
 
@@ -45,8 +45,8 @@ export default function Members() {
   const [modal, setModal] = useState(false);
   const [editingMember, setEditingMember] = useState<any>(null);
 
-  const [membersList, setMembersList] = useState<any[]>(MEMBERS);
-  const [wardsList, setWardsList] = useState<any[]>(WARDS);
+  const [membersList, setMembersList] = useState<any[]>([]);
+  const [wardsList, setWardsList] = useState<any[]>([]);
   const [familiesList, setFamiliesList] = useState<any[]>([]);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -60,35 +60,47 @@ export default function Members() {
         familiesApi.list(),
       ]);
 
-      if (Array.isArray(membersData) && membersData.length > 0) {
+      if (Array.isArray(membersData)) {
         setMembersList(
-          membersData.map((m: any) => ({
-            id: m.id || m._id,
-            name: m.name || `${m.firstName || ""} ${m.lastName || ""}`.trim() || "Parishioner",
-            nameMl: m.nameMl || m.malayalamName || "",
-            baptismName: m.baptismName || "",
-            familyId: m.familyId || m.family_id || "F-100",
-            familyHouse: m.familyHouse || m.houseName || "Parish House",
-            ward: m.wardNumber || m.ward || 1,
-            wardPatron: m.wardPatron || "St. Mary",
-            phone: m.phone || m.phoneNumber || "+91 98765 43210",
-            blood: m.bloodGroup || m.blood || "O+",
-            sacraments: m.sacraments || ["baptism", "communion"],
-            status: m.status || "active",
-            gender: m.gender || m.sex || "",
-            avatar: getMemberAvatar(m),
-            raw: m,
-          }))
+          membersData.map((m: any) => {
+            const firstName = m.firstName || m.first_name || "";
+            const lastName = m.lastName || m.last_name || "";
+            const fullName = m.name || `${firstName} ${lastName}`.trim() || "Parishioner";
+            const wardNum = m.wardNumber || (typeof m.ward_id === 'object' ? m.ward_id?.ward_number : m.ward_id) || m.ward || "";
+            const wardPatron = m.wardPatron || (typeof m.ward_id === 'object' ? m.ward_id?.ward_name : "") || "";
+            const famHouse = m.familyHouse || m.house_name || m.houseName || (typeof m.family_id === 'object' ? m.family_id?.house_name : "") || "";
+            const famId = m.familyId || (typeof m.family_id === 'object' ? m.family_id?.id : m.family_id) || "";
+            const phone = m.phone || m.phoneNumber || m.phone_number || "";
+            const blood = m.bloodGroup || m.blood_group || m.blood || "";
+
+            return {
+              id: m.id || m._id,
+              name: fullName,
+              nameMl: m.nameMl || m.malayalam_name || m.malayalamName || "",
+              baptismName: m.baptismName || m.baptism_name || "",
+              familyId: famId,
+              familyHouse: famHouse,
+              ward: wardNum,
+              wardPatron: wardPatron,
+              phone: phone,
+              blood: blood,
+              sacraments: Array.isArray(m.sacraments) ? m.sacraments : [],
+              status: m.status || "active",
+              gender: m.gender || m.sex || "",
+              avatar: getMemberAvatar(m),
+              raw: m,
+            };
+          })
         );
       }
-      if (Array.isArray(wardsData) && wardsData.length > 0) {
+      if (Array.isArray(wardsData)) {
         setWardsList(wardsData);
       }
-      if (Array.isArray(familiesData) && familiesData.length > 0) {
+      if (Array.isArray(familiesData)) {
         setFamiliesList(familiesData);
       }
     } catch (e) {
-      console.warn("[Members] API fetch fallback to seed data:", e);
+      console.error("[Members] API fetch error:", e);
     }
   };
 
