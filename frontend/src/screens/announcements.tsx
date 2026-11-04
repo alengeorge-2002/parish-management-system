@@ -1,12 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import { 
-  View, 
-  Text, 
+import {
+  View,
+  Text,
   ScrollView,
   RefreshControl,
-  TouchableOpacity, 
-  StyleSheet, 
-  ActivityIndicator, 
+  TouchableOpacity,
+  StyleSheet,
+  ActivityIndicator,
   Platform,
   Image
 } from 'react-native';
@@ -43,7 +43,7 @@ export default function AnnouncementsScreen() {
     try {
       token = await SecureStore.getItemAsync('user_token') || localStorage.getItem('user_token');
     } catch (_) {
-      try { token = localStorage.getItem('user_token'); } catch (__) {}
+      try { token = localStorage.getItem('user_token'); } catch (__) { }
     }
 
     try {
@@ -58,7 +58,7 @@ export default function AnnouncementsScreen() {
       if (response.ok) {
         const data = await response.json();
         const rawData: Announcement[] = Array.isArray(data) ? data : [];
-        
+
         // Sort announcements by date timestamp descending (latest first)
         const sortedData = rawData.sort((a: any, b: any) => {
           const dateA = new Date(a.date || a.announcement_date || a.created_at || a.createdAt || 0).getTime();
@@ -103,7 +103,7 @@ export default function AnnouncementsScreen() {
 
   const renderItem = ({ item }: { item: Announcement }) => {
     const isHighPriority = item.priority?.toLowerCase() === 'high';
-    
+
     return (
       <View style={[globalStyles.card, styles.announcementCard]}>
         <View style={styles.cardHeader}>
@@ -115,11 +115,11 @@ export default function AnnouncementsScreen() {
           {/* Priority Badge */}
           {item.priority && (
             <View style={[
-              styles.priorityBadge, 
+              styles.priorityBadge,
               isHighPriority ? styles.priorityHigh : styles.priorityNormal
             ]}>
               <Text style={[
-                styles.priorityText, 
+                styles.priorityText,
                 isHighPriority ? styles.priorityTextHigh : styles.priorityTextNormal
               ]}>
                 {item.priority.toUpperCase()}
@@ -133,7 +133,7 @@ export default function AnnouncementsScreen() {
 
         {/* Display image if present */}
         {item.image_url && item.image_url.trim() !== '' && (
-          <Image 
+          <Image
             source={{ uri: item.image_url.startsWith('/uploads') ? `${API_BASE_URL}${item.image_url}` : item.image_url }}
             style={styles.announcementImage}
             resizeMode="cover"
@@ -148,7 +148,7 @@ export default function AnnouncementsScreen() {
       {/* Header */}
       <View style={styles.header}>
         <View style={styles.headerRow}>
-          <TouchableOpacity 
+          <TouchableOpacity
             style={styles.backButton}
             onPress={() => navigation.goBack()}
             accessibilityLabel="Go back"
@@ -174,10 +174,10 @@ export default function AnnouncementsScreen() {
           contentContainerStyle={styles.listContainer}
           showsVerticalScrollIndicator={false}
           refreshControl={
-            <RefreshControl 
-              refreshing={refreshing} 
-              onRefresh={handleRefresh} 
-              colors={[colors.primary]} 
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={handleRefresh}
+              colors={[colors.primary]}
               tintColor={colors.primary}
             />
           }
@@ -199,11 +199,11 @@ export default function AnnouncementsScreen() {
                   {/* Priority Badge */}
                   {item.priority && (
                     <View style={[
-                      styles.priorityBadge, 
+                      styles.priorityBadge,
                       isHigh ? styles.priorityHigh : styles.priorityNormal
                     ]}>
                       <Text style={[
-                        styles.priorityText, 
+                        styles.priorityText,
                         isHigh ? styles.priorityTextHigh : styles.priorityTextNormal
                       ]}>
                         {String(item.priority).toUpperCase()}
@@ -217,7 +217,7 @@ export default function AnnouncementsScreen() {
 
                 {/* Display image if present */}
                 {itemImg && String(itemImg).trim() !== '' && (
-                  <Image 
+                  <Image
                     source={{ uri: String(itemImg).startsWith('/uploads') ? `${API_BASE_URL}${itemImg}` : itemImg }}
                     style={styles.announcementImage}
                     resizeMode="cover"

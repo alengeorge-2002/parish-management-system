@@ -52,7 +52,7 @@ function AvatarStack({ family, onClick }: { family: any; onClick?: () => void })
 }
 
 export default function Families() {
-  const { tt, toast, selectedWardFilter, setSelectedWardFilter } = useApp();
+  const { tt, toast, selectedWardFilter, setSelectedWardFilter, navigate } = useApp();
   const [q, setQ] = useState("");
   const [ward, setWard] = useState(selectedWardFilter || "");
   const [view, setView] = useState<"grid" | "table">("grid");
@@ -63,6 +63,18 @@ export default function Families() {
   const [familyMembersList, setFamilyMembersList] = useState<any[]>([]);
   const [loadingMembers, setLoadingMembers] = useState(false);
   const [detailsModalOpen, setDetailsModalOpen] = useState(false);
+
+  const handleAddMemberFromRoster = (targetFamily?: any) => {
+    const fam = targetFamily || selectedFamilyForDetails;
+    setDetailsModalOpen(false);
+    navigate('/members', {
+      state: {
+        openAddMemberModal: true,
+        selectedFamilyId: fam?.id || fam?._id || fam?.raw?._id || fam?.raw?.id,
+        family: fam,
+      },
+    });
+  };
 
   const [familiesList, setFamiliesList] = useState<any[]>([]);
   const [wardsList, setWardsList] = useState<any[]>([]);
@@ -447,6 +459,7 @@ export default function Families() {
         family={selectedFamilyForDetails}
         members={familyMembersList}
         loading={loadingMembers}
+        onAddMember={() => handleAddMemberFromRoster(selectedFamilyForDetails)}
       />
     </div>
   );

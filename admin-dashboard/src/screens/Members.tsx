@@ -24,7 +24,7 @@ import {
   EmptyState,
 } from "../components/ui";
 import { MemberModal } from "../components/modals";
-import { useApp } from "../lib/app-context";
+import { useApp, useLocation, useNavigate } from "../lib/app-context";
 import { BLOOD_GROUPS, type Sacrament } from "../lib/data";
 import { membersApi, wardsApi, familiesApi } from "../utils/api-client";
 import getMemberAvatar from "../utils/getMemberAvatar";
@@ -38,11 +38,15 @@ const SAC_FILTERS: { value: string; label: string }[] = [
 
 export default function Members() {
   const { tt, toast } = useApp();
+  const location = useLocation();
+  const navigate = useNavigate();
+
   const [q, setQ] = useState("");
   const [ward, setWard] = useState("");
   const [blood, setBlood] = useState("");
   const [sac, setSac] = useState("");
   const [modal, setModal] = useState(false);
+  const setIsAddMemberModalOpen = setModal;
   const [editingMember, setEditingMember] = useState<any>(null);
 
   const [membersList, setMembersList] = useState<any[]>([]);
@@ -51,6 +55,83 @@ export default function Members() {
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [importing, setImporting] = useState(false);
+
+  useEffect(() => {
+    if (location.state?.openAddMemberModal) {
+      const selectedFamId =
+        location.state.selectedFamilyId ||
+        location.state.family?.id ||
+        location.state.family?._id ||
+        location.state.family?.raw?._id ||
+        location.state.family?.raw?.id;
+
+      const fam =
+        location.state.family ||
+        familiesList.find(
+          (f: any) =>
+            String(f.id || f._id) === String(selectedFamId) ||
+            (f.raw?._id && String(f.raw._id) === String(selectedFamId))
+        );
+
+      const rawWardId =
+        fam?.wardId?._id ||
+        fam?.wardId ||
+        fam?.ward_id ||
+        fam?.ward ||
+        fam?.raw?.ward_id ||
+        fam?.raw?.ward ||
+        "";
+      const wardIdVal =
+        typeof rawWardId === "object"
+          ? rawWardId._id || rawWardId.id || ""
+          : String(rawWardId || "");
+      const wardNumVal =
+        fam?.wardNumber ||
+        fam?.ward_number ||
+        fam?.raw?.ward_number ||
+        fam?.raw?.wardNumber ||
+        (typeof fam?.ward === "number" || typeof fam?.ward === "string" ? fam.ward : "");
+      const wardNameVal =
+        fam?.wardName ||
+        fam?.ward_name ||
+        fam?.wardPatron ||
+        fam?.raw?.ward_name ||
+        "";
+      const unitVal =
+        fam?.unit ||
+        fam?.unit_number ||
+        fam?.unitNumber ||
+        fam?.raw?.unit ||
+        fam?.raw?.unit_number ||
+        "Unit I";
+
+      if (fam && !familiesList.some((f: any) => String(f.id || f._id) === String(selectedFamId))) {
+        setFamiliesList((prev) => [fam, ...prev]);
+      }
+
+      setEditingMember({
+        familyId: String(selectedFamId || ""),
+        wardId: wardIdVal,
+        ward_id: wardIdVal,
+        wardNumber: wardNumVal,
+        ward_number: wardNumVal,
+        wardName: wardNameVal,
+        ward_name: wardNameVal,
+        unit: unitVal,
+        unit_number: unitVal,
+      });
+
+      setIsAddMemberModalOpen(true);
+
+      // Clear or reset navigation state so refreshing does not continuously force-open the modal
+      if (typeof window !== "undefined" && window.history?.replaceState) {
+        window.history.replaceState(null, "", window.location.pathname);
+      }
+      if (navigate) {
+        navigate(window.location.pathname, { state: null });
+      }
+    }
+  }, [location.state]);
 
   const loadData = async () => {
     try {

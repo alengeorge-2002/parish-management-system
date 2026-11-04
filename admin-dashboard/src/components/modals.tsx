@@ -150,13 +150,16 @@ export function MemberModal({
 
   // Selected family object
   const selectedFamily = families.find(
-    (f: any) => String(f.id || f._id) === String(formData.familyId)
+    (f: any) =>
+      String(f.id || f._id || f.raw?._id || "") === String(formData.familyId) ||
+      (f._id && String(f._id) === String(formData.familyId)) ||
+      (f.id && String(f.id) === String(formData.familyId))
   );
 
   // Automatically sync the ward and unit states whenever familyId or selectedFamily changes
   useEffect(() => {
     if (selectedFamily) {
-      const rawWardId = selectedFamily.wardId?._id || selectedFamily.wardId || selectedFamily.ward_id;
+      const rawWardId = selectedFamily.wardId?._id || selectedFamily.wardId || selectedFamily.ward_id || selectedFamily.ward || selectedFamily.raw?.ward_id || selectedFamily.raw?.ward;
       const derivedWardId = typeof rawWardId === 'object' ? (rawWardId._id || rawWardId.id || '') : String(rawWardId || '');
 
       const matchedWard = wards.find((w: any) => {
@@ -165,9 +168,9 @@ export function MemberModal({
         return wId && target && wId === target;
       });
 
-      const derivedWardName = selectedFamily.wardId?.wardName || selectedFamily.wardId?.patron || selectedFamily.wardName || selectedFamily.ward_name || matchedWard?.patron || matchedWard?.wardName || matchedWard?.ward_name || '';
-      const derivedWardNumber = selectedFamily.wardId?.wardNumber || selectedFamily.wardId?.number || selectedFamily.wardNumber || selectedFamily.ward_number || matchedWard?.number || matchedWard?.wardNumber || matchedWard?.ward_number || '';
-      const derivedUnit = selectedFamily.unit || selectedFamily.unit_number || selectedFamily.unitNumber || 'Unit I';
+      const derivedWardName = selectedFamily.wardId?.wardName || selectedFamily.wardId?.patron || selectedFamily.wardName || selectedFamily.ward_name || selectedFamily.wardPatron || matchedWard?.patron || matchedWard?.wardName || matchedWard?.ward_name || '';
+      const derivedWardNumber = selectedFamily.wardId?.wardNumber || selectedFamily.wardId?.number || selectedFamily.wardNumber || selectedFamily.ward_number || selectedFamily.ward || matchedWard?.number || matchedWard?.wardNumber || matchedWard?.ward_number || '';
+      const derivedUnit = selectedFamily.unit || selectedFamily.unit_number || selectedFamily.unitNumber || selectedFamily.raw?.unit || selectedFamily.raw?.unit_number || 'Unit I';
 
       setFormData(prev => ({
         ...prev,
@@ -185,7 +188,12 @@ export function MemberModal({
 
   // Handle auto-inheriting ward and unit when family selection changes
   const handleFamilyChange = (famId: string) => {
-    const selFam = families.find((f: any) => String(f.id || f._id) === String(famId));
+    const selFam = families.find(
+      (f: any) =>
+        String(f.id || f._id || f.raw?._id || "") === String(famId) ||
+        (f._id && String(f._id) === String(famId)) ||
+        (f.id && String(f.id) === String(famId))
+    );
     let newWardId = formData.wardId;
     let newUnit = formData.unit;
 
@@ -394,7 +402,13 @@ export function MemberModal({
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <Field label="Family Unit">
             <Select
-              value={formData.familyId}
+              value={
+                families.some((f: any) => String(f.id || f._id) === String(formData.familyId))
+                  ? formData.familyId
+                  : selectedFamily
+                    ? String(selectedFamily.id || selectedFamily._id)
+                    : formData.familyId
+              }
               onChange={(e) => handleFamilyChange(e.target.value)}
             >
               <option value="">Select family</option>
@@ -1219,6 +1233,7 @@ export function FamilyDetailsModal({
   members = [],
   loading = false,
   onEditMember,
+  onAddMember,
 }: {
   open: boolean;
   onClose: () => void;
@@ -1226,9 +1241,25 @@ export function FamilyDetailsModal({
   members: any[];
   loading?: boolean;
   onEditMember?: (member: any) => void;
+  onAddMember?: () => void;
 }) {
-  const { tt } = useApp();
+  const { tt, navigate } = useApp();
   if (!family || !open) return null;
+
+  const handleAddMember = () => {
+    onClose();
+    if (onAddMember) {
+      onAddMember();
+    } else if (navigate) {
+      navigate('/members', {
+        state: {
+          openAddMemberModal: true,
+          selectedFamilyId: family?.id || family?._id || family?.raw?._id || family?.raw?.id,
+          family: family,
+        },
+      });
+    }
+  };
 
   const houseName = typeof family.house === 'object'
     ? (family.house?.house_name || family.house?.familyName || family.house?.name || "Household")
@@ -1327,6 +1358,13 @@ export function FamilyDetailsModal({
             <h4 className="text-[14px] font-bold text-foreground">
               Household Members ({safeMembersList.length})
             </h4>
+            <button
+              type="button"
+              onClick={handleAddMember}
+              className="px-3.5 py-1.5 bg-[#F4C430] hover:bg-[#e0b328] text-black text-xs font-semibold rounded-lg transition inline-flex items-center gap-1.5"
+            >
+              + Add Member
+            </button>
           </div>
 
           {loading ? (
@@ -1335,8 +1373,15 @@ export function FamilyDetailsModal({
               Loading family roster...
             </div>
           ) : safeMembersList.length === 0 ? (
-            <div className="rounded-[10px] border border-dashed border-border p-6 text-center text-[13px] text-muted-foreground">
-              No registered members found for this household.
+            <div className="rounded-[10px] border border-dashed border-border p-6 text-center text-[13px] text-muted-foreground flex flex-col items-center justify-center gap-3">
+              <p>No registered members found for this household.</p>
+              <button
+                type="button"
+                onClick={handleAddMember}
+                className="px-3.5 py-1.5 bg-[#F4C430] hover:bg-[#e0b328] text-black text-xs font-semibold rounded-lg transition inline-flex items-center gap-1.5"
+              >
+                + Add Member
+              </button>
             </div>
           ) : (
             <div className="overflow-x-auto rounded-[10px] border border-border pr-1">
@@ -1443,3 +1488,6 @@ export function FamilyDetailsModal({
     </Modal>
   );
 }
+
+export { FamilyDetailsModal as FamilyRosterModal };
+
