@@ -1,5 +1,17 @@
 import { Request, Response, NextFunction } from 'express';
+import bcrypt from 'bcryptjs';
 import { pool } from '../config/db';
+
+let appUsersSchemaEnsured = false;
+export const ensureAppUsersSchema = async () => {
+  if (appUsersSchemaEnsured) return;
+  try {
+    await pool.query(`ALTER TABLE app_users ADD COLUMN IF NOT EXISTS password_hash VARCHAR(255);`);
+    appUsersSchemaEnsured = true;
+  } catch (err) {
+    console.warn('Could not ensure app_users schema:', err);
+  }
+};
 
 /*** Helper to extract uploaded file ***/
 const extractUploadedPhoto = (req: Request): string | null => {
@@ -32,8 +44,9 @@ const parseId = (val: any): number | null => {
 /*** User Management ***/
 export const getAllUsers = async (_req: Request, res: Response) => {
   try {
+    await ensureAppUsersSchema();
     const result = await pool.query(
-      `SELECT u.id, u.member_id, u.role, u.access_key,
+      `SELECT u.id, u.member_id, u.role, u.access_key, u.password_hash,
               m.first_name, m.last_name, m.email
        FROM app_users u
        LEFT JOIN members m ON u.member_id = m.id
@@ -46,6 +59,7 @@ export const getAllUsers = async (_req: Request, res: Response) => {
       role: u.role,
       access_key: u.access_key,
       accessKey: u.access_key,
+      has_password: Boolean(u.password_hash),
       first_name: u.first_name || (u.role === 'admin' ? 'Admin' : 'Parishioner'),
       last_name: u.last_name || 'User',
       email: u.email || (u.role === 'admin' ? 'admin@devagiriparish.com' : 'parishioner@devagiriparish.com'),
@@ -59,17 +73,22 @@ export const getAllUsers = async (_req: Request, res: Response) => {
 
 export const createUser = async (req: Request, res: Response): Promise<any> => {
   try {
-    const { memberId, role, accessKey } = req.body;
+    await ensureAppUsersSchema();
+    const { memberId, role, accessKey, password } = req.body;
     const mId = parseId(memberId);
     if (!mId || !role) {
       return res.status(400).json({ error: 'memberId and role required' });
     }
     const finalAccessKey = accessKey || Math.random().toString(36).slice(2, 14);
+    let passwordHash: string | null = null;
+    if (password && typeof password === 'string' && password.trim()) {
+      passwordHash = await bcrypt.hash(password.trim(), 10);
+    }
     const result = await pool.query(
-      `INSERT INTO app_users (member_id, access_key, role)
-       VALUES ($1, $2, $3)
+      `INSERT INTO app_users (member_id, access_key, role, password_hash)
+       VALUES ($1, $2, $3, $4)
        RETURNING *`,
-      [mId, finalAccessKey, role]
+      [mId, finalAccessKey, role, passwordHash]
     );
     const row = result.rows[0];
     res.status(201).json({ ...row, id: String(row.id), _id: String(row.id) });
@@ -80,14 +99,35 @@ export const createUser = async (req: Request, res: Response): Promise<any> => {
 
 export const updateUser = async (req: Request, res: Response): Promise<any> => {
   try {
+    await ensureAppUsersSchema();
     const id = parseId(req.params.id);
-    const { role } = req.body;
-    if (!id || !role) {
-      return res.status(400).json({ error: 'Valid id and role required' });
+    const { role, password, accessKey } = req.body;
+    if (!id || (!role && !password && !accessKey)) {
+      return res.status(400).json({ error: 'Valid id and role or password required' });
     }
+
+    const updates: string[] = [];
+    const values: any[] = [];
+    let paramIndex = 1;
+
+    if (role) {
+      updates.push(`role = $${paramIndex++}`);
+      values.push(role);
+    }
+    if (accessKey && typeof accessKey === 'string' && accessKey.trim()) {
+      updates.push(`access_key = $${paramIndex++}`);
+      values.push(accessKey.trim());
+    }
+    if (password && typeof password === 'string' && password.trim()) {
+      const passwordHash = await bcrypt.hash(password.trim(), 10);
+      updates.push(`password_hash = $${paramIndex++}`);
+      values.push(passwordHash);
+    }
+
+    values.push(id);
     const result = await pool.query(
-      `UPDATE app_users SET role = $1 WHERE id = $2 RETURNING *`,
-      [role, id]
+      `UPDATE app_users SET ${updates.join(', ')} WHERE id = $${paramIndex} RETURNING *`,
+      values
     );
     if (result.rows.length === 0) {
       return res.status(404).json({ error: 'User not found' });

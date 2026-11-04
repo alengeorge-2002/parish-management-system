@@ -13,6 +13,8 @@ import {
   Trash2,
   Search,
   RefreshCw,
+  Lock,
+  Sparkles,
 } from "lucide-react";
 import {
   Card,
@@ -41,6 +43,9 @@ export default function Users() {
   const [selectedMemberId, setSelectedMemberId] = useState("");
   const [selectedRole, setSelectedRole] = useState("parishioner");
   const [customAccessKey, setCustomAccessKey] = useState("");
+  const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
+  const [passwordCopied, setPasswordCopied] = useState(false);
 
   const [revealedKeys, setRevealedKeys] = useState<Record<string, boolean>>({});
   const [copiedId, setCopiedId] = useState<string | null>(null);
@@ -84,17 +89,61 @@ export default function Users() {
     }
   };
 
+  const generateRandomPassword = (length = 10): string => {
+    // Generates a secure, readable random password (8-10 alphanumeric characters),
+    // avoiding confusing symbols like O vs 0, and l vs 1 vs I
+    const uppers = "ABCDEFGHJKLMNPQRSTUVWXYZ"; // No O, I
+    const lowers = "abcdefghijkmnopqrstuvwxyz"; // No l, o
+    const digits = "23456789"; // No 0, 1
+    const pool = uppers + lowers + digits;
+
+    const chars = [
+      uppers[Math.floor(Math.random() * uppers.length)],
+      lowers[Math.floor(Math.random() * lowers.length)],
+      digits[Math.floor(Math.random() * digits.length)],
+    ];
+
+    for (let i = 3; i < length; i++) {
+      chars.push(pool[Math.floor(Math.random() * pool.length)]);
+    }
+
+    // Shuffle characters
+    for (let i = chars.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [chars[i], chars[j]] = [chars[j], chars[i]];
+    }
+
+    return chars.join("");
+  };
+
+  const handleGeneratePassword = () => {
+    const generated = generateRandomPassword(10);
+    setPassword(generated);
+    if (navigator?.clipboard?.writeText) {
+      navigator.clipboard.writeText(generated);
+      setPasswordCopied(true);
+      toast("Generated password copied to clipboard");
+      setTimeout(() => setPasswordCopied(false), 2500);
+    }
+  };
+
   const openAddModal = () => {
     setEditingUser(null);
     setSelectedMemberId(membersList[0]?.id ? String(membersList[0].id) : "");
     setSelectedRole("parishioner");
     setCustomAccessKey("");
+    setPassword("");
+    setShowPassword(false);
+    setPasswordCopied(false);
     setModalOpen(true);
   };
 
   const openEditModal = (user: any) => {
     setEditingUser(user);
     setSelectedRole(user.role || "parishioner");
+    setPassword("");
+    setShowPassword(false);
+    setPasswordCopied(false);
     setModalOpen(true);
   };
 
@@ -102,14 +151,23 @@ export default function Users() {
     e.preventDefault();
     try {
       if (editingUser) {
-        await usersApi.update(editingUser.id || editingUser._id, selectedRole);
-        toast(`User role updated to ${selectedRole}`);
+        await usersApi.update(
+          editingUser.id || editingUser._id,
+          selectedRole,
+          password.trim() || undefined
+        );
+        toast(`User account updated successfully`);
       } else {
         if (!selectedMemberId) {
           toast("Please select a parish member");
           return;
         }
-        await usersApi.create(selectedMemberId, selectedRole, customAccessKey.trim());
+        await usersApi.create(
+          selectedMemberId,
+          selectedRole,
+          customAccessKey.trim() || undefined,
+          password.trim() || undefined
+        );
         toast("New user account created successfully");
       }
       setModalOpen(false);
@@ -295,7 +353,7 @@ export default function Users() {
       <Modal
         open={modalOpen}
         onClose={() => setModalOpen(false)}
-        title={editingUser ? "Edit User Role" : "Create New User Account"}
+        title={editingUser ? "Edit User Account" : "Add User Account"}
       >
         <form onSubmit={handleSaveUser} className="space-y-4">
           {!editingUser && (
@@ -325,6 +383,47 @@ export default function Users() {
             </Select>
           </Field>
 
+          {/* Password Field with Eye Toggle & Generator */}
+          <Field label={editingUser ? "Password (Leave blank to keep current)" : "Password"}>
+            <div className="flex items-center gap-2">
+              <div className="relative flex-1">
+                <Lock className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                <Input
+                  type={showPassword ? "text" : "password"}
+                  placeholder={editingUser ? "Enter new password or leave blank" : "Enter or generate password"}
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  className="pl-9 pr-10 font-mono text-[13px]"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
+                  title={showPassword ? "Hide password" : "Show password"}
+                >
+                  {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                </button>
+              </div>
+
+              <div className="relative">
+                <button
+                  type="button"
+                  onClick={handleGeneratePassword}
+                  title="Generate Random Password"
+                  className="px-3.5 py-2 rounded-lg border border-[#F4C430]/60 bg-[#F4C430]/10 hover:bg-[#F4C430]/20 text-[#F4C430] hover:border-[#F4C430] text-xs font-semibold transition inline-flex items-center gap-1.5 cursor-pointer shrink-0 shadow-sm active:scale-95"
+                >
+                  <Sparkles className="h-3.5 w-3.5" />
+                  <span className="hidden sm:inline">Generate</span>
+                </button>
+                {passwordCopied && (
+                  <span className="absolute -top-7 right-0 text-[10px] font-bold bg-[#F4C430] text-black px-1.5 py-0.5 rounded shadow whitespace-nowrap animate-in fade-in">
+                    Copied!
+                  </span>
+                )}
+              </div>
+            </div>
+          </Field>
+
           {!editingUser && (
             <Field label="Access Key (Optional: leave blank to auto-generate)">
               <div className="relative">
@@ -345,7 +444,7 @@ export default function Users() {
               Cancel
             </Button>
             <Button type="submit">
-              {editingUser ? "Update Role" : "Create Account"}
+              {editingUser ? "Update Account" : "Create Account"}
             </Button>
           </div>
         </form>

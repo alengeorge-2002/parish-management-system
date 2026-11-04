@@ -143,8 +143,10 @@ export async function seedDefaultUsersAndDependencies() {
         member_id INT NOT NULL REFERENCES members(id) ON DELETE CASCADE,
         access_key VARCHAR(255) UNIQUE NOT NULL,
         role VARCHAR(50) DEFAULT 'parishioner',
+        password_hash VARCHAR(255) NULL,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
+      ALTER TABLE app_users ADD COLUMN IF NOT EXISTS password_hash VARCHAR(255);
       ALTER TABLE app_users DROP CONSTRAINT IF EXISTS app_users_member_id_key;
       CREATE UNIQUE INDEX IF NOT EXISTS idx_app_users_access_key ON app_users(access_key);
     `);

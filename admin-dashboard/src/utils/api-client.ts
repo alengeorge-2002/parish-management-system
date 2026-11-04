@@ -235,13 +235,13 @@ export const clergyApi = {
 
 export const usersApi = {
   list: () => fetchApi('/admin/users'),
-  create: (memberId: string | number, role: string, accessKey: string) => fetchApi('/admin/users', {
+  create: (memberId: string | number, role: string, accessKey?: string, password?: string) => fetchApi('/admin/users', {
     method: 'POST',
-    body: JSON.stringify({ memberId, role, accessKey }),
+    body: JSON.stringify({ memberId, role, accessKey, password }),
   }),
-  update: (id: string | number, role: string) => fetchApi(`/admin/users/${id}`, {
+  update: (id: string | number, role?: string, password?: string) => fetchApi(`/admin/users/${id}`, {
     method: 'PUT',
-    body: JSON.stringify({ role }),
+    body: JSON.stringify({ role, password }),
   }),
   delete: (id: string | number) => fetchApi(`/admin/users/${id}`, {
     method: 'DELETE',
