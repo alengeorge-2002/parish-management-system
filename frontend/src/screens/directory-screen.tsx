@@ -306,13 +306,20 @@ export default function DirectoryScreen() {
 
       // 2. Member match via sub-array loop
       const matchingMembers = membersData.filter(m => {
-        if (String(m.family_id || m.familyId) !== String(fam.id)) return false;
+        const mFamId = String(
+          m.familyId ||
+          (typeof m.family_id === 'object' ? (m.family_id?.id || m.family_id?._id) : m.family_id) ||
+          ''
+        );
+        if (mFamId !== String(fam.id)) return false;
         const firstName = (m.first_name || m.firstName || '').toLowerCase().trim();
         const lastName = (m.last_name || m.lastName || '').toLowerCase().trim();
         const fullName = `${firstName} ${lastName}`.trim();
+        const baptism = (m.baptism_name || m.baptismName || '').toLowerCase().trim();
         return firstName.includes(lowerQuery) || 
                lastName.includes(lowerQuery) || 
-               fullName.includes(lowerQuery);
+               fullName.includes(lowerQuery) ||
+               baptism.includes(lowerQuery);
       });
 
       if (houseMatches || matchingMembers.length > 0) {
@@ -349,13 +356,20 @@ export default function DirectoryScreen() {
       const houseMatches = fam.houseName.toLowerCase().includes(lowerQuery);
 
       const matchingMembers = membersData.filter(m => {
-        if (String(m.family_id || m.familyId) !== String(fam.id)) return false;
+        const mFamId = String(
+          m.familyId ||
+          (typeof m.family_id === 'object' ? (m.family_id?.id || m.family_id?._id) : m.family_id) ||
+          ''
+        );
+        if (mFamId !== String(fam.id)) return false;
         const firstName = (m.first_name || m.firstName || '').toLowerCase().trim();
         const lastName = (m.last_name || m.lastName || '').toLowerCase().trim();
         const fullName = `${firstName} ${lastName}`.trim();
+        const baptism = (m.baptism_name || m.baptismName || '').toLowerCase().trim();
         return firstName.includes(lowerQuery) || 
                lastName.includes(lowerQuery) || 
-               fullName.includes(lowerQuery);
+               fullName.includes(lowerQuery) ||
+               baptism.includes(lowerQuery);
       });
 
       if (houseMatches || matchingMembers.length > 0) {

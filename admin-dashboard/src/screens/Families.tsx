@@ -93,15 +93,24 @@ export default function Families() {
         ? res 
         : (res && Array.isArray((res as any).data) ? (res as any).data : (res && Array.isArray((res as any).members) ? (res as any).members : []));
       
+      const getFamId = (m: any) =>
+        String(
+          m.familyId ||
+          (typeof m.family_id === "object" ? m.family_id?.id || m.family_id?._id : m.family_id) ||
+          m.raw?.family_id ||
+          m.raw?.family ||
+          ""
+        );
+
       if (Array.isArray(rawList) && rawList.length > 0) {
         const matched = rawList.filter((m: any) => {
-          const mFamId = String(m.familyId || m.family_id || m.raw?.family_id || m.raw?.family || "");
+          const mFamId = getFamId(m);
           return mFamId === targetId || mFamId === String(f.raw?._id);
         });
         setFamilyMembersList(matched.length > 0 ? matched : rawList);
       } else {
         const localMatched = membersList.filter((m: any) => {
-          const mFamId = String(m.familyId || m.family_id || m.raw?.family_id || m.raw?.family || "");
+          const mFamId = getFamId(m);
           return mFamId === targetId || mFamId === String(f.raw?._id);
         });
         setFamilyMembersList(localMatched);
@@ -109,7 +118,13 @@ export default function Families() {
     } catch (err) {
       console.error("Failed to load family members for roster:", err);
       const localMatched = membersList.filter((m: any) => {
-        const mFamId = String(m.familyId || m.family_id || m.raw?.family_id || m.raw?.family || "");
+        const mFamId = String(
+          m.familyId ||
+          (typeof m.family_id === "object" ? m.family_id?.id || m.family_id?._id : m.family_id) ||
+          m.raw?.family_id ||
+          m.raw?.family ||
+          ""
+        );
         return mFamId === String(f.id || f._id) || mFamId === String(f.raw?._id);
       });
       setFamilyMembersList(localMatched);

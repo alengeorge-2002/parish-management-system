@@ -501,6 +501,115 @@ export const addUnitToWard = async (req: Request, res: Response): Promise<any> =
   }
 };
 
+/*** Family & Member JSON Mapping Helpers ***/
+export const mapFamilyRow = (row: any) => {
+  const wObj = typeof row.ward === 'object' ? row.ward : (typeof row.ward_id === 'object' ? row.ward_id : null);
+  const wId = wObj ? String(wObj.id || wObj._id || '') : (row.ward_id ? String(row.ward_id) : null);
+  const wName = wObj?.ward_name || wObj?.wardName || row.ward_name || '';
+  const wNum = wObj?.ward_number ?? wObj?.wardNumber ?? row.ward_number ?? null;
+
+  return {
+    ...row,
+    id: String(row.id),
+    _id: String(row.id),
+    family_id: String(row.id),
+    familyName: row.family_name || '',
+    family_name: row.family_name || '',
+    houseName: row.house_name || '',
+    house_name: row.house_name || '',
+    headOfFamily: row.head_of_family || '',
+    head_of_family: row.head_of_family || '',
+    head: row.head_of_family || '',
+    unitNumber: row.unit_number || '',
+    unit_number: row.unit_number || '',
+    unit: row.unit_number || '',
+    homeAddress: row.home_address || '',
+    home_address: row.home_address || '',
+    address: row.home_address || '',
+    familyPhotoUrl: row.family_photo_url || '',
+    family_photo_url: row.family_photo_url || '',
+    contactNumber: row.contact_number || '',
+    contact_number: row.contact_number || '',
+    phone: row.contact_number || '',
+    email: row.email || '',
+    wardId: wId,
+    ward_id: wId,
+    ward: row.ward || wObj,
+    wardName: wName,
+    ward_name: wName,
+    wardNumber: wNum,
+    ward_number: wNum,
+    memberCount: Number(row.member_count) || 0,
+    member_count: Number(row.member_count) || 0,
+    familyCode: row.family_code || '',
+    family_code: row.family_code || '',
+    regNo: row.reg_no || '',
+    reg_no: row.reg_no || '',
+  };
+};
+
+export const mapMemberRow = (row: any) => {
+  const fId = row.family_id && typeof row.family_id === 'object'
+    ? String(row.family_id.id || row.family_id._id || '')
+    : (row.family_id ? String(row.family_id) : '');
+  const wId = row.ward_id && typeof row.ward_id === 'object'
+    ? String(row.ward_id.id || row.ward_id._id || '')
+    : (row.ward_id ? String(row.ward_id) : '');
+  const fObj = typeof row.family_id === 'object' ? row.family_id : (typeof row.family === 'object' ? row.family : null);
+  const wObj = typeof row.ward_id === 'object' ? row.ward_id : (typeof row.ward === 'object' ? row.ward : null);
+  const fullName = `${row.first_name || ''} ${row.last_name || ''}`.trim() || 'Parishioner';
+  const houseName = row.house_name || fObj?.house_name || '';
+  const familyName = row.family_name || fObj?.family_name || houseName;
+
+  return {
+    ...row,
+    id: String(row.id),
+    _id: String(row.id),
+    member_id: String(row.id),
+    firstName: row.first_name || '',
+    first_name: row.first_name || '',
+    lastName: row.last_name || '',
+    last_name: row.last_name || '',
+    fullName,
+    name: fullName,
+    malayalamName: row.malayalam_name || '',
+    malayalam_name: row.malayalam_name || '',
+    nameMl: row.malayalam_name || '',
+    baptismName: row.baptism_name || '',
+    baptism_name: row.baptism_name || '',
+    phoneNumber: row.phone_number || '',
+    phone_number: row.phone_number || '',
+    phone: row.phone_number || '',
+    email: row.email || '',
+    bloodGroup: row.blood_group || '',
+    blood_group: row.blood_group || '',
+    relationshipRole: row.relationship_role || 'Member',
+    relationship_role: row.relationship_role || 'Member',
+    relationshipToHead: row.relationship_role || 'Member',
+    isHeadOfHousehold: Boolean(row.is_head_of_household),
+    is_head_of_household: Boolean(row.is_head_of_household),
+    dob: row.dob,
+    dom: row.dom,
+    occupation: row.occupation || '',
+    gender: row.gender || 'MALE',
+    status: row.status || 'active',
+    familyId: fId,
+    family_id: fId,
+    family: fObj,
+    houseName,
+    house_name: houseName,
+    familyName,
+    family_name: familyName,
+    familyHouse: houseName,
+    wardId: wId,
+    ward_id: wId,
+    wardName: wObj?.ward_name || '',
+    ward_name: wObj?.ward_name || '',
+    wardNumber: wObj?.ward_number ?? null,
+    ward_number: wObj?.ward_number ?? null,
+  };
+};
+
 /*** Family Management ***/
 export const getAllFamilies = async (_req: Request, res: Response) => {
   try {
@@ -520,24 +629,7 @@ export const getAllFamilies = async (_req: Request, res: Response) => {
        ORDER BY f.family_name ASC`
     );
 
-    const mapped = result.rows.map((row: any) => ({
-      ...row,
-      id: String(row.id),
-      _id: String(row.id),
-      family_id: String(row.id),
-      familyName: row.family_name,
-      houseName: row.house_name,
-      headOfFamily: row.head_of_family,
-      unitNumber: row.unit_number,
-      homeAddress: row.home_address,
-      address: row.home_address,
-      familyPhotoUrl: row.family_photo_url,
-      contactNumber: row.contact_number,
-      phone: row.contact_number,
-      wardId: row.ward_id ? String(row.ward_id) : null,
-      ward_id: row.ward,
-      ward: row.ward,
-    }));
+    const mapped = result.rows.map((row: any) => mapFamilyRow(row));
 
     res.json(mapped);
   } catch (error: any) {
@@ -577,13 +669,10 @@ export const getFamilyById = async (req: Request, res: Response): Promise<any> =
     );
 
     const famRow = famResult.rows[0];
-    const family = {
-      ...famRow,
-      id: String(famRow.id),
-      _id: String(famRow.id),
-    };
+    const family = mapFamilyRow(famRow);
+    const members = memResult.rows.map((m: any) => mapMemberRow(m));
 
-    res.json({ family, members: memResult.rows });
+    res.json({ family, members });
   } catch (error: any) {
     res.status(500).json({ error: error.message || 'Error fetching family details' });
   }
@@ -619,7 +708,7 @@ export const createFamily = async (req: Request, res: Response) => {
     );
 
     const row = result.rows[0];
-    res.status(201).json({ ...row, id: String(row.id), _id: String(row.id) });
+    res.status(201).json(mapFamilyRow(row));
   } catch (error: any) {
     res.status(500).json({ error: error.message || 'Error creating family' });
   }
@@ -669,7 +758,7 @@ export const updateFamily = async (req: Request, res: Response) => {
 
     if (result.rows.length === 0) return res.status(404).json({ error: 'Family not found' });
     const row = result.rows[0];
-    res.json({ ...row, id: String(row.id), _id: String(row.id) });
+    res.json(mapFamilyRow(row));
   } catch (error: any) {
     res.status(500).json({ error: error.message || 'Error updating family' });
   }
@@ -724,20 +813,7 @@ export const getAllMembers = async (req: Request, res: Response) => {
     sql += ` ORDER BY m.last_name ASC, m.first_name ASC`;
     const result = await pool.query(sql, params);
 
-    const mapped = result.rows.map((row: any) => ({
-      ...row,
-      id: String(row.id),
-      _id: String(row.id),
-      member_id: String(row.id),
-      firstName: row.first_name,
-      lastName: row.last_name,
-      phoneNumber: row.phone_number,
-      phone: row.phone_number,
-      bloodGroup: row.blood_group,
-      relationshipRole: row.relationship_role,
-      relationshipToHead: row.relationship_role,
-      isHeadOfHousehold: row.is_head_of_household,
-    }));
+    const mapped = result.rows.map((row: any) => mapMemberRow(row));
 
     res.json(mapped);
   } catch (error: any) {
@@ -806,7 +882,7 @@ export const createMember = async (req: Request, res: Response) => {
     );
 
     const row = result.rows[0];
-    res.status(201).json({ ...row, id: String(row.id), _id: String(row.id) });
+    res.status(201).json(mapMemberRow(row));
   } catch (error: any) {
     res.status(500).json({ error: error.message || 'Error creating member' });
   }
@@ -867,7 +943,7 @@ export const updateMember = async (req: Request, res: Response) => {
 
     if (result.rows.length === 0) return res.status(404).json({ error: 'Member not found' });
     const row = result.rows[0];
-    res.json({ ...row, id: String(row.id), _id: String(row.id) });
+    res.json(mapMemberRow(row));
   } catch (error: any) {
     res.status(500).json({ error: error.message || 'Error updating member' });
   }

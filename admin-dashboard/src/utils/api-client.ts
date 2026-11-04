@@ -1,8 +1,20 @@
 // src/utils/api-client.ts
 
-const rawApiUrl = (import.meta.env.VITE_API_URL || 'http://localhost:5000/api').trim().replace(/\/+$/, '');
+const envApiUrl = (import.meta.env.VITE_API_BASE_URL || import.meta.env.VITE_API_URL || '').trim();
+let rawApiUrl = envApiUrl;
+
+if (!rawApiUrl) {
+  if (import.meta.env.PROD && typeof window !== 'undefined' && window.location?.origin) {
+    // In production builds, avoid hardcoding localhost
+    rawApiUrl = `${window.location.origin}/api`;
+  } else {
+    rawApiUrl = 'http://localhost:5000/api';
+  }
+}
+
+rawApiUrl = rawApiUrl.replace(/\/+$/, '');
 export const API_BASE_URL = rawApiUrl.endsWith('/api') ? rawApiUrl.slice(0, -4) : rawApiUrl;
-const BASE_URL = rawApiUrl.endsWith('/api') ? rawApiUrl : `${rawApiUrl}/api`;
+export const BASE_URL = rawApiUrl.endsWith('/api') ? rawApiUrl : `${rawApiUrl}/api`;
 
 export interface UserSession {
   token: string;

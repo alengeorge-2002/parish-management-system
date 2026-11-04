@@ -12,6 +12,18 @@ export const connectDB = async (): Promise<Pool> => {
   try {
     const client = await pool.connect();
     console.log('PostgreSQL Connected successfully via connection pool.');
+
+    // Ensure critical columns exist in Neon PostgreSQL
+    try {
+      await client.query(`
+        ALTER TABLE members ADD COLUMN IF NOT EXISTS is_directory_visible BOOLEAN DEFAULT true;
+        ALTER TABLE members ADD COLUMN IF NOT EXISTS role VARCHAR(50) DEFAULT 'parishioner';
+        ALTER TABLE app_users ADD COLUMN IF NOT EXISTS password_hash VARCHAR(255);
+      `);
+    } catch (e) {
+      console.warn('Schema check warning:', e);
+    }
+
     client.release();
     return pool;
   } catch (error) {

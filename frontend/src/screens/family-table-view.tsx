@@ -54,7 +54,15 @@ export default function FamilyTableView() {
           const rawMembers = await response.json();
           const allMembers = Array.isArray(rawMembers) ? rawMembers : [];
           // Filter members belonging strictly to this family_id
-          const familyMembers = allMembers.filter((m: any) => m.family_id === family.id);
+          const targetFamId = String(family.id || family._id || '');
+          const familyMembers = allMembers.filter((m: any) => {
+            const mFamId = String(
+              m.familyId ||
+              (typeof m.family_id === 'object' ? (m.family_id?.id || m.family_id?._id) : m.family_id) ||
+              ''
+            );
+            return mFamId === targetFamId;
+          });
           
           // Map to rows
           const mapped = familyMembers.map((m: any) => {

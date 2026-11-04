@@ -1,7 +1,23 @@
 import { Platform } from 'react-native';
 import axios from 'axios';
 
-let rawUrl = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:5000';
+const isProd = process.env.NODE_ENV === 'production';
+let rawUrl = (process.env.EXPO_PUBLIC_API_URL || '').trim();
+
+if (!rawUrl) {
+  if (isProd) {
+    if (Platform.OS === 'web' && typeof window !== 'undefined' && window.location?.origin) {
+      rawUrl = window.location.origin;
+    } else {
+      // Production fallback for mobile devices - never default to localhost in production
+      rawUrl = 'https://api.devagiriparish.com';
+    }
+  } else {
+    // Development fallback
+    rawUrl = 'http://localhost:5000';
+  }
+}
+
 if (rawUrl.includes(':3000')) {
   rawUrl = rawUrl.replace(':3000', ':5000');
 }
