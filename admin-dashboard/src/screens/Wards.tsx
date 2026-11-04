@@ -20,6 +20,7 @@ export default function Wards() {
   const [unitModalWard, setUnitModalWard] = useState<any>(null);
   const [newUnitNumber, setNewUnitNumber] = useState("");
   const [submittingUnit, setSubmittingUnit] = useState(false);
+  const [unitError, setUnitError] = useState("");
 
   const handleOpenWardHouseholds = (w: any) => {
     setSelectedWardForHouseholds(w);
@@ -84,7 +85,12 @@ export default function Wards() {
 
   const handleAddUnitSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!unitModalWard || !newUnitNumber.trim()) return;
+    if (!unitModalWard) return;
+    if (!newUnitNumber.trim()) {
+      setUnitError("Unit designation / number is required");
+      return;
+    }
+    setUnitError("");
     setSubmittingUnit(true);
     try {
       await fetchApi(`/wards/${unitModalWard._id || unitModalWard.id}/units`, {
@@ -280,6 +286,7 @@ export default function Wards() {
                 onClick={() => {
                   setUnitModalWard(null);
                   setNewUnitNumber("");
+                  setUnitError("");
                 }}
                 className="text-muted-foreground hover:text-foreground text-sm font-semibold"
               >
@@ -295,10 +302,11 @@ export default function Wards() {
                   type="text"
                   placeholder="e.g. Unit V"
                   value={newUnitNumber}
-                  onChange={(e) => setNewUnitNumber(e.target.value)}
-                  className="w-full rounded-lg border border-[#232833] bg-[#1a1f27] px-3 py-2 text-sm text-foreground focus:border-[#F4C430] focus:outline-none"
+                  onChange={(e) => { setNewUnitNumber(e.target.value); setUnitError(""); }}
+                  className={`w-full rounded-lg border ${unitError ? "border-rose-500/80" : "border-[#232833]"} bg-[#1a1f27] px-3 py-2 text-sm text-foreground focus:border-[#F4C430] focus:outline-none`}
                   autoFocus
                 />
+                {unitError && <p className="text-xs text-rose-500 mt-1">{unitError}</p>}
               </div>
               <div className="flex justify-end gap-2 pt-2">
                 <Button
@@ -307,11 +315,12 @@ export default function Wards() {
                   onClick={() => {
                     setUnitModalWard(null);
                     setNewUnitNumber("");
+                    setUnitError("");
                   }}
                 >
                   Cancel
                 </Button>
-                <Button type="submit" disabled={submittingUnit || !newUnitNumber.trim()}>
+                <Button type="submit" disabled={submittingUnit}>
                   {submittingUnit ? "Saving..." : "Add Unit"}
                 </Button>
               </div>

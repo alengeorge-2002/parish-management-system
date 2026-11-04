@@ -23,6 +23,12 @@ import {
 import { requireAuth, requireAdmin } from '../middleware/auth-middleware';
 import { uploadFamilyPhoto, uploadClergyAvatar } from '../middleware/upload-middleware';
 import { createClergy, updateClergy, deleteClergy } from '../controllers/admin-clergy-controller';
+import {
+  validateCreateUser,
+  validateUpdateUser,
+  validateCreateFamily,
+  validateCreateMember,
+} from '../middleware/validate';
 
 const router = Router();
 
@@ -57,8 +63,8 @@ router.use(requireAdmin);
 
 // User management
 router.get('/users', getAllUsers);
-router.post('/users', createUser);
-router.put('/users/:id', updateUser);
+router.post('/users', validateCreateUser, createUser);
+router.put('/users/:id', validateUpdateUser, updateUser);
 router.delete('/users/:id', deleteUser);
 
 // Ward management write
@@ -72,13 +78,13 @@ const familyPhotoUpload = uploadFamilyPhoto.fields([
   { name: 'familyPhoto', maxCount: 1 },
   { name: 'family_photo', maxCount: 1 }
 ]);
-router.post('/families', familyPhotoUpload, createFamily);
+router.post('/families', familyPhotoUpload, validateCreateFamily, createFamily);
 router.put('/families/:id', familyPhotoUpload, updateFamily);
 router.delete('/families/:id', deleteFamily);
 
 // Member management write
 router.post('/members/bulk', importMembersBulk);
-router.post('/members', createMember);
+router.post('/members', validateCreateMember, createMember);
 router.put('/members/:id', updateMember);
 router.delete('/members/:id', deleteMember);
 

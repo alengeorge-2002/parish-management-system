@@ -4,6 +4,7 @@ import { Modal, Field, Input, Select, Button, Pill } from "./ui";
 import { useApp } from "../lib/app-context";
 import { BLOOD_GROUPS } from "../lib/data";
 import { getMemberAvatar } from "../utils/getMemberAvatar";
+import { validatePhone, validateEmail, validatePassword, VALID_BLOOD_GROUPS } from "../lib/validators";
 
 /* ---------- 4-Step Add/Edit Member Modal ---------- */
 export interface MemberFormData {
@@ -53,6 +54,7 @@ export function MemberModal({
   const [step, setStep] = useState(0);
   const [saving, setSaving] = useState(false);
   const [photoFile, setPhotoFile] = useState<File | null>(null);
+  const [errors, setErrors] = useState<Record<string, string>>({});
 
   const [formData, setFormData] = useState<MemberFormData>({
     fullName: "",
@@ -225,6 +227,12 @@ export function MemberModal({
   ];
 
   const handleFinish = async () => {
+    // Validate final step (contact) before saving
+    const stepErrs: Record<string, string> = {};
+    if (formData.phone && !validatePhone(formData.phone)) {
+      stepErrs.phone = "Enter a valid phone number (7–15 digits, optional + prefix)";
+    }
+    if (Object.keys(stepErrs).length > 0) { setErrors(stepErrs); return; }
     setSaving(true);
     try {
       const finalUnit = formData.unit || selectedFamily?.unit || selectedFamily?.unit_number || "";
@@ -249,6 +257,56 @@ export function MemberModal({
     } finally {
       setSaving(false);
     }
+  };
+
+  /** Validates the current step fields; returns true if valid */
+  const validateCurrentStep = (): boolean => {
+    const errs: Record<string, string> = {};
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    if (step === 0) {
+      if (!formData.fullName.trim() || formData.fullName.trim().length < 2) {
+        errs.fullName = "Full name is required (min 2 characters)";
+      }
+      if (formData.dob) {
+        const dobDate = new Date(formData.dob);
+        if (isNaN(dobDate.getTime())) {
+          errs.dob = "Enter a valid date of birth";
+        } else if (dobDate > today) {
+          errs.dob = "Date of birth cannot be in the future";
+        }
+      }
+      if (formData.bloodGroup && !VALID_BLOOD_GROUPS.includes(formData.bloodGroup)) {
+        errs.bloodGroup = "Select a valid blood group";
+      }
+    }
+
+    if (step === 1) {
+      if (!formData.familyId) {
+        errs.familyId = "Please select a family";
+      }
+      if (!formData.relationshipToHead) {
+        errs.relationshipToHead = "Please select relationship to head of family";
+      }
+    }
+
+    if (step === 2) {
+      const dobDate = formData.dob ? new Date(formData.dob) : null;
+      if (formData.marriageDate) {
+        const domDate = new Date(formData.marriageDate);
+        if (isNaN(domDate.getTime())) {
+          errs.marriageDate = "Enter a valid marriage date";
+        } else if (domDate > today) {
+          errs.marriageDate = "Marriage date cannot be in the future";
+        } else if (dobDate && !isNaN(dobDate.getTime()) && domDate <= dobDate) {
+          errs.marriageDate = "Marriage date must be after date of birth";
+        }
+      }
+    }
+
+    setErrors(errs);
+    return Object.keys(errs).length === 0;
   };
 
   // Clean Header Subtitle function (removes raw 24-char Mongo Hex ObjectIDs)
@@ -276,12 +334,12 @@ export function MemberModal({
       footer={
         <>
           {step > 0 && (
-            <Button variant="ghost" onClick={() => setStep((s) => s - 1)}>
+            <Button variant="ghost" onClick={() => { setErrors({}); setStep((s) => s - 1); }}>
               {tt("back")}
             </Button>
           )}
           {step < steps.length - 1 ? (
-            <Button onClick={() => setStep((s) => s + 1)}>{tt("next")}</Button>
+            <Button onClick={() => { if (validateCurrentStep()) setStep((s) => s + 1); }}>{tt("next")}</Button>
           ) : (
             <Button onClick={handleFinish} disabled={saving}>
               <Check className="h-4 w-4" />
@@ -331,8 +389,10 @@ export function MemberModal({
             <Input
               placeholder="e.g. Joseph Thekkedathu"
               value={formData.fullName}
-              onChange={(e) => setFormData({ ...formData, fullName: e.target.value })}
+              onChange={(e) => { setFormData({ ...formData, fullName: e.target.value }); setErrors((p) => ({ ...p, fullName: "" })); }}
+              className={errors.fullName ? "border-rose-500/80" : ""}
             />
+            {errors.fullName && <p className="text-xs text-rose-500 mt-1">{errors.fullName}</p>}
           </Field>
           <Field label="Malayalam Name">
             <Input
@@ -362,13 +422,16 @@ export function MemberModal({
             <Input
               type="date"
               value={formData.dob}
-              onChange={(e) => setFormData({ ...formData, dob: e.target.value })}
+              onChange={(e) => { setFormData({ ...formData, dob: e.target.value }); setErrors((p) => ({ ...p, dob: "" })); }}
+              className={errors.dob ? "border-rose-500/80" : ""}
             />
+            {errors.dob && <p className="text-xs text-rose-500 mt-1">{errors.dob}</p>}
           </Field>
           <Field label="Blood Group">
             <Select
               value={formData.bloodGroup}
-              onChange={(e) => setFormData({ ...formData, bloodGroup: e.target.value })}
+              onChange={(e) => { setFormData({ ...formData, bloodGroup: e.target.value }); setErrors((p) => ({ ...p, bloodGroup: "" })); }}
+              className={errors.bloodGroup ? "border-rose-500/80" : ""}
             >
               {BLOOD_GROUPS.map((b) => (
                 <option key={b} value={b}>
@@ -376,6 +439,7 @@ export function MemberModal({
                 </option>
               ))}
             </Select>
+            {errors.bloodGroup && <p className="text-xs text-rose-500 mt-1">{errors.bloodGroup}</p>}
           </Field>
           <Field label="Parishioner Status">
             <Select
@@ -409,7 +473,8 @@ export function MemberModal({
                     ? String(selectedFamily.id || selectedFamily._id)
                     : formData.familyId
               }
-              onChange={(e) => handleFamilyChange(e.target.value)}
+              onChange={(e) => { handleFamilyChange(e.target.value); setErrors((p) => ({ ...p, familyId: "" })); }}
+              className={errors.familyId ? "border-rose-500/80" : ""}
             >
               <option value="">Select family</option>
               {families.map((f: any) => {
@@ -427,11 +492,13 @@ export function MemberModal({
                 );
               })}
             </Select>
+            {errors.familyId && <p className="text-xs text-rose-500 mt-1">{errors.familyId}</p>}
           </Field>
           <Field label="Relationship to Head">
             <Select
               value={formData.relationshipToHead}
-              onChange={(e) => setFormData({ ...formData, relationshipToHead: e.target.value })}
+              onChange={(e) => { setFormData({ ...formData, relationshipToHead: e.target.value }); setErrors((p) => ({ ...p, relationshipToHead: "" })); }}
+              className={errors.relationshipToHead ? "border-rose-500/80" : ""}
             >
               <option value="Head of Family">Head of Family</option>
               <option value="Spouse">Spouse</option>
@@ -440,6 +507,7 @@ export function MemberModal({
               <option value="Parent">Parent</option>
               <option value="Other">Other</option>
             </Select>
+            {errors.relationshipToHead && <p className="text-xs text-rose-500 mt-1">{errors.relationshipToHead}</p>}
           </Field>
           {/* Ward Subdivision (Auto-Inherited) */}
           <div>
@@ -500,8 +568,10 @@ export function MemberModal({
             <Input
               type="date"
               value={formData.marriageDate}
-              onChange={(e) => setFormData({ ...formData, marriageDate: e.target.value })}
+              onChange={(e) => { setFormData({ ...formData, marriageDate: e.target.value }); setErrors((p) => ({ ...p, marriageDate: "" })); }}
+              className={errors.marriageDate ? "border-rose-500/80" : ""}
             />
+            {errors.marriageDate && <p className="text-xs text-rose-500 mt-1">{errors.marriageDate}</p>}
           </Field>
         </div>
       )}
@@ -512,8 +582,10 @@ export function MemberModal({
             <Input
               placeholder="+91 "
               value={formData.phone}
-              onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+              onChange={(e) => { setFormData({ ...formData, phone: e.target.value }); setErrors((p) => ({ ...p, phone: "" })); }}
+              className={errors.phone ? "border-rose-500/80" : ""}
             />
+            {errors.phone && <p className="text-xs text-rose-500 mt-1">{errors.phone}</p>}
           </Field>
           <Field label="Email">
             <Input
@@ -557,6 +629,7 @@ export function FamilyModal({
   const { tt } = useApp();
   const [saving, setSaving] = useState(false);
   const [photoFile, setPhotoFile] = useState<File | null>(null);
+  const [famErrors, setFamErrors] = useState<Record<string, string>>({});
   const [formData, setFormData] = useState({
     familyName: "",
     houseName: "",
@@ -570,6 +643,7 @@ export function FamilyModal({
 
   useEffect(() => {
     setPhotoFile(null);
+    setFamErrors({});
     if (initialData) {
       const wId = initialData.wardId || initialData.ward_id || initialData.ward || "";
       const uVal = initialData.unit || initialData.unit_number || initialData.unitNumber || "";
@@ -607,6 +681,26 @@ export function FamilyModal({
   const availableUnits = Array.isArray(selectedWard?.units) ? selectedWard.units : [];
 
   const handleSave = async () => {
+    // --- Validate ---
+    const errs: Record<string, string> = {};
+    const famName = formData.familyName.trim();
+    const houseName = formData.houseName.trim();
+    if (!famName && !houseName) {
+      errs.familyName = "Family name is required (min 2 characters)";
+    } else if ((famName || houseName).length < 2) {
+      errs.familyName = "Family name must be at least 2 characters";
+    }
+    if (!formData.wardId) {
+      errs.wardId = "Please select a ward subdivision";
+    }
+    if (!formData.unit) {
+      errs.unit = "Please select a unit";
+    }
+    if (formData.phone.trim() && !validatePhone(formData.phone)) {
+      errs.phone = "Enter a valid phone number (7–15 digits, optional + prefix)";
+    }
+    if (Object.keys(errs).length > 0) { setFamErrors(errs); return; }
+    setFamErrors({});
     setSaving(true);
     try {
       if (photoFile) {
@@ -661,14 +755,16 @@ export function FamilyModal({
           <Input
             placeholder="e.g. Thekkedathu"
             value={formData.familyName}
-            onChange={(e) => setFormData({ ...formData, familyName: e.target.value })}
+            onChange={(e) => { setFormData({ ...formData, familyName: e.target.value }); setFamErrors((p) => ({ ...p, familyName: "" })); }}
+            className={famErrors.familyName ? "border-rose-500/80" : ""}
           />
+          {famErrors.familyName && <p className="text-xs text-rose-500 mt-1">{famErrors.familyName}</p>}
         </Field>
         <Field label="House Name">
           <Input
             placeholder="e.g. Thekkedathu House"
             value={formData.houseName}
-            onChange={(e) => setFormData({ ...formData, houseName: e.target.value })}
+            onChange={(e) => { setFormData({ ...formData, houseName: e.target.value }); setFamErrors((p) => ({ ...p, familyName: "" })); }}
           />
         </Field>
         <Field label="Head of Family">
@@ -687,7 +783,8 @@ export function FamilyModal({
         <Field label="Ward Subdivision">
           <Select
             value={formData.wardId}
-            onChange={(e) => setFormData({ ...formData, wardId: e.target.value, unit: "", unit_number: "" })}
+            onChange={(e) => { setFormData({ ...formData, wardId: e.target.value, unit: "", unit_number: "" }); setFamErrors((p) => ({ ...p, wardId: "", unit: "" })); }}
+            className={famErrors.wardId ? "border-rose-500/80" : ""}
           >
             <option value="">Select ward</option>
             {wards.map((w: any) => (
@@ -696,12 +793,14 @@ export function FamilyModal({
               </option>
             ))}
           </Select>
+          {famErrors.wardId && <p className="text-xs text-rose-500 mt-1">{famErrors.wardId}</p>}
         </Field>
         <Field label="Ward Unit">
           <Select
             value={formData.unit || ""}
-            onChange={(e) => setFormData({ ...formData, unit: e.target.value, unit_number: e.target.value })}
+            onChange={(e) => { setFormData({ ...formData, unit: e.target.value, unit_number: e.target.value }); setFamErrors((p) => ({ ...p, unit: "" })); }}
             disabled={!formData.wardId || availableUnits.length === 0}
+            className={famErrors.unit ? "border-rose-500/80" : ""}
           >
             <option value="">Select unit</option>
             {availableUnits.map((u: any, idx: number) => {
@@ -714,13 +813,16 @@ export function FamilyModal({
               );
             })}
           </Select>
+          {famErrors.unit && <p className="text-xs text-rose-500 mt-1">{famErrors.unit}</p>}
         </Field>
         <Field label="Contact Phone">
           <Input
             placeholder="+91 98765 43210"
             value={formData.phone}
-            onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+            onChange={(e) => { setFormData({ ...formData, phone: e.target.value }); setFamErrors((p) => ({ ...p, phone: "" })); }}
+            className={famErrors.phone ? "border-rose-500/80" : ""}
           />
+          {famErrors.phone && <p className="text-xs text-rose-500 mt-1">{famErrors.phone}</p>}
         </Field>
         <Field label="Full Address" className="sm:col-span-2">
           <textarea
@@ -900,6 +1002,7 @@ export function WardModal({
 }) {
   const { tt } = useApp();
   const [saving, setSaving] = useState(false);
+  const [wardErrors, setWardErrors] = useState<Record<string, string>>({});
   const [formData, setFormData] = useState({
     wardNumber: 1,
     wardName: "",
@@ -908,6 +1011,7 @@ export function WardModal({
   });
 
   useEffect(() => {
+    setWardErrors({});
     if (initialData) {
       setFormData({
         wardNumber: initialData.number || initialData.wardNumber || 1,
@@ -926,6 +1030,15 @@ export function WardModal({
   }, [initialData, open]);
 
   const handleSave = async () => {
+    const errs: Record<string, string> = {};
+    if (!formData.wardName.trim() || formData.wardName.trim().length < 2) {
+      errs.wardName = "Ward name is required (min 2 characters)";
+    }
+    if (!formData.wardNumber || formData.wardNumber < 1 || !Number.isInteger(formData.wardNumber)) {
+      errs.wardNumber = "Ward number must be a positive integer";
+    }
+    if (Object.keys(errs).length > 0) { setWardErrors(errs); return; }
+    setWardErrors({});
     setSaving(true);
     try {
       await onSave(formData);
@@ -960,15 +1073,19 @@ export function WardModal({
           <Input
             type="number"
             value={formData.wardNumber}
-            onChange={(e) => setFormData({ ...formData, wardNumber: parseInt(e.target.value) || 1 })}
+            onChange={(e) => { setFormData({ ...formData, wardNumber: parseInt(e.target.value) || 1 }); setWardErrors((p) => ({ ...p, wardNumber: "" })); }}
+            className={wardErrors.wardNumber ? "border-rose-500/80" : ""}
           />
+          {wardErrors.wardNumber && <p className="text-xs text-rose-500 mt-1">{wardErrors.wardNumber}</p>}
         </Field>
         <Field label="Ward Patron / Name">
           <Input
             placeholder="e.g. St. Jude"
             value={formData.wardName}
-            onChange={(e) => setFormData({ ...formData, wardName: e.target.value })}
+            onChange={(e) => { setFormData({ ...formData, wardName: e.target.value }); setWardErrors((p) => ({ ...p, wardName: "" })); }}
+            className={wardErrors.wardName ? "border-rose-500/80" : ""}
           />
+          {wardErrors.wardName && <p className="text-xs text-rose-500 mt-1">{wardErrors.wardName}</p>}
         </Field>
         <Field label="Representative / President">
           <Input

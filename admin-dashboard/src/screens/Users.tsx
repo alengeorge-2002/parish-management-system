@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { validatePassword, validateAccessKey } from "../lib/validators";
 import {
   Shield,
   ShieldCheck,
@@ -46,6 +47,8 @@ export default function Users() {
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [passwordCopied, setPasswordCopied] = useState(false);
+
+  const [errors, setErrors] = useState<Record<string, string>>({});
 
   const [revealedKeys, setRevealedKeys] = useState<Record<string, boolean>>({});
   const [copiedId, setCopiedId] = useState<string | null>(null);
@@ -135,6 +138,7 @@ export default function Users() {
     setPassword("");
     setShowPassword(false);
     setPasswordCopied(false);
+    setErrors({});
     setModalOpen(true);
   };
 
@@ -144,11 +148,54 @@ export default function Users() {
     setPassword("");
     setShowPassword(false);
     setPasswordCopied(false);
+    setErrors({});
     setModalOpen(true);
+  };
+
+  const validateUserForm = (): boolean => {
+    const errs: Record<string, string> = {};
+
+    if (!editingUser && !selectedMemberId) {
+      errs.memberId = "Please select a parish member";
+    }
+
+    if (!["admin", "parishioner"].includes(selectedRole)) {
+      errs.role = "Please select a valid role";
+    }
+
+    const pwd = password.trim();
+    if (!editingUser) {
+      // Required on create
+      if (!pwd) {
+        errs.password = "Password is required";
+      } else {
+        const strength = validatePassword(pwd);
+        if (!strength.minLength) errs.password = "Password must be at least 8 characters";
+        else if (!strength.hasUpper) errs.password = "Password must contain at least one uppercase letter";
+        else if (!strength.hasLower) errs.password = "Password must contain at least one lowercase letter";
+        else if (!strength.hasDigit) errs.password = "Password must contain at least one number";
+      }
+    } else if (pwd) {
+      // Optional on edit — only validate if provided
+      const strength = validatePassword(pwd);
+      if (!strength.minLength) errs.password = "Password must be at least 8 characters";
+      else if (!strength.hasUpper) errs.password = "Password must contain at least one uppercase letter";
+      else if (!strength.hasLower) errs.password = "Password must contain at least one lowercase letter";
+      else if (!strength.hasDigit) errs.password = "Password must contain at least one number";
+    }
+
+    const key = customAccessKey.trim();
+    if (key && !validateAccessKey(key)) {
+      errs.accessKey = "Access key must be alphanumeric, min 4 characters (no spaces)";
+    }
+
+    setErrors(errs);
+    return Object.keys(errs).length === 0;
   };
 
   const handleSaveUser = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!validateUserForm()) return;
     try {
       if (editingUser) {
         await usersApi.update(
@@ -158,10 +205,6 @@ export default function Users() {
         );
         toast(`User account updated successfully`);
       } else {
-        if (!selectedMemberId) {
-          toast("Please select a parish member");
-          return;
-        }
         await usersApi.create(
           selectedMemberId,
           selectedRole,
@@ -360,8 +403,8 @@ export default function Users() {
             <Field label="Link to Parish Member">
               <Select
                 value={selectedMemberId}
-                onChange={(e) => setSelectedMemberId(e.target.value)}
-                required
+                onChange={(e) => { setSelectedMemberId(e.target.value); setErrors((p) => ({ ...p, memberId: "" })); }}
+                className={errors.memberId ? "border-rose-500/80" : ""}
               >
                 {membersList.map((m) => (
                   <option key={m.id || m._id} value={m.id || m._id}>
@@ -369,18 +412,20 @@ export default function Users() {
                   </option>
                 ))}
               </Select>
+              {errors.memberId && <p className="text-xs text-rose-500 mt-1">{errors.memberId}</p>}
             </Field>
           )}
 
           <Field label="Account Role">
             <Select
               value={selectedRole}
-              onChange={(e) => setSelectedRole(e.target.value)}
-              required
+              onChange={(e) => { setSelectedRole(e.target.value); setErrors((p) => ({ ...p, role: "" })); }}
+              className={errors.role ? "border-rose-500/80" : ""}
             >
               <option value="parishioner">Parishioner (Regular Directory Access)</option>
               <option value="admin">Administrator (Full Sanctum Access)</option>
             </Select>
+            {errors.role && <p className="text-xs text-rose-500 mt-1">{errors.role}</p>}
           </Field>
 
           {/* Password Field with Eye Toggle & Generator */}
@@ -392,8 +437,8 @@ export default function Users() {
                   type={showPassword ? "text" : "password"}
                   placeholder={editingUser ? "Enter new password or leave blank" : "Enter or generate password"}
                   value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  className="pl-9 pr-10 font-mono text-[13px]"
+                  onChange={(e) => { setPassword(e.target.value); setErrors((p) => ({ ...p, password: "" })); }}
+                  className={`pl-9 pr-10 font-mono text-[13px]${errors.password ? " border-rose-500/80" : ""}`}
                 />
                 <button
                   type="button"
@@ -422,6 +467,7 @@ export default function Users() {
                 )}
               </div>
             </div>
+            {errors.password && <p className="text-xs text-rose-500 mt-1">{errors.password}</p>}
           </Field>
 
           {!editingUser && (
@@ -432,10 +478,11 @@ export default function Users() {
                   type="text"
                   placeholder="e.g. user_custom_pass123"
                   value={customAccessKey}
-                  onChange={(e) => setCustomAccessKey(e.target.value)}
-                  className="pl-9 font-mono"
+                  onChange={(e) => { setCustomAccessKey(e.target.value); setErrors((p) => ({ ...p, accessKey: "" })); }}
+                  className={`pl-9 font-mono${errors.accessKey ? " border-rose-500/80" : ""}`}
                 />
               </div>
+              {errors.accessKey && <p className="text-xs text-rose-500 mt-1">{errors.accessKey}</p>}
             </Field>
           )}
 
