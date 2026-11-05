@@ -184,9 +184,14 @@ export default function DirectoryScreen() {
               unitNumber: unitNumVal,
               ward: wardName || 'Parish Ward',
               wardId: fam.ward_id || fam.ward,
-              photoUrl: fam.family_photo_url && fam.family_photo_url.startsWith('/uploads') 
-                ? `${API_BASE_URL}${fam.family_photo_url}` 
-                : (fam.family_photo_url || ''),
+              photoUrl: (fam.family_photo_url || fam.familyPhotoUrl || fam.photoUrl || '') &&
+                String(fam.family_photo_url || fam.familyPhotoUrl || fam.photoUrl).startsWith('/uploads')
+                ? `${API_BASE_URL}${fam.family_photo_url || fam.familyPhotoUrl || fam.photoUrl}`
+                : (fam.family_photo_url || fam.familyPhotoUrl || fam.photoUrl || ''),
+              familyPhotoUrl: (fam.family_photo_url || fam.familyPhotoUrl || fam.photoUrl || '') &&
+                String(fam.family_photo_url || fam.familyPhotoUrl || fam.photoUrl).startsWith('/uploads')
+                ? `${API_BASE_URL}${fam.family_photo_url || fam.familyPhotoUrl || fam.photoUrl}`
+                : (fam.family_photo_url || fam.familyPhotoUrl || fam.photoUrl || ''),
               contactNumber: fam.contact_number || fam.contactNumber || '',
               email: fam.email || ''
             };
@@ -510,7 +515,11 @@ export default function DirectoryScreen() {
             <View style={styles.detailsHeader}>
               {selectedProfile.familyPhotoUrl && selectedProfile.familyPhotoUrl.trim() !== '' ? (
                 <Image 
-                  source={{ uri: selectedProfile.familyPhotoUrl }} 
+                  source={{ 
+                    uri: selectedProfile.familyPhotoUrl.startsWith('/uploads')
+                      ? `${API_BASE_URL}${selectedProfile.familyPhotoUrl}`
+                      : selectedProfile.familyPhotoUrl 
+                  }} 
                   style={styles.familyPhoto} 
                   accessibilityLabel="Family Photo"
                 />

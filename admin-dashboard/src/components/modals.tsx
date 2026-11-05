@@ -1,10 +1,17 @@
 import { useState, useEffect } from "react";
-import { UploadCloud, Check, Image as ImageIcon, X } from "lucide-react";
+import { UploadCloud, Check, Image as ImageIcon, X, Home } from "lucide-react";
 import { Modal, Field, Input, Select, Button, Pill } from "./ui";
 import { useApp } from "../lib/app-context";
 import { BLOOD_GROUPS } from "../lib/data";
 import { getMemberAvatar } from "../utils/getMemberAvatar";
 import { validatePhone, validateEmail, validatePassword, VALID_BLOOD_GROUPS } from "../lib/validators";
+import { API_BASE_URL } from "../utils/api-client";
+
+export const getPhotoSrc = (url?: string | null) => {
+  if (!url) return null;
+  if (url.startsWith('http') || url.startsWith('blob:') || url.startsWith('data:')) return url;
+  return `${API_BASE_URL}${url.startsWith('/') ? '' : '/'}${url}`;
+};
 
 /* ---------- 4-Step Add/Edit Member Modal ---------- */
 export interface MemberFormData {
@@ -639,6 +646,7 @@ export function FamilyModal({
     unit_number: "",
     address: "",
     phone: "",
+    email: "",
   });
 
   useEffect(() => {
@@ -656,6 +664,7 @@ export function FamilyModal({
         unit_number: uVal,
         address: initialData.address || initialData.home_address || "",
         phone: initialData.phone || initialData.contact_number || "",
+        email: initialData.email || "",
       });
     } else {
       setFormData({
@@ -667,6 +676,7 @@ export function FamilyModal({
         unit_number: "",
         address: "",
         phone: "",
+        email: "",
       });
     }
   }, [initialData, open]);
@@ -685,42 +695,66 @@ export function FamilyModal({
     const errs: Record<string, string> = {};
     const famName = formData.familyName.trim();
     const houseName = formData.houseName.trim();
+    // Only require Family / House Name (string, min 2 chars)
     if (!famName && !houseName) {
-      errs.familyName = "Family name is required (min 2 characters)";
+      errs.familyName = "Family or house name is required (minimum 2 characters)";
     } else if ((famName || houseName).length < 2) {
-      errs.familyName = "Family name must be at least 2 characters";
+      errs.familyName = "Family or house name must be at least 2 characters";
     }
+    // Only require Ward (valid selected ward ID)
     if (!formData.wardId) {
       errs.wardId = "Please select a ward subdivision";
     }
+    // Only require Unit (selected unit number / name)
     if (!formData.unit) {
       errs.unit = "Please select a unit";
     }
-    if (formData.phone.trim() && !validatePhone(formData.phone)) {
+    // Optional contact number - validate only if entered
+    if (formData.phone && formData.phone.trim() && !validatePhone(formData.phone)) {
       errs.phone = "Enter a valid phone number (7–15 digits, optional + prefix)";
     }
-    if (Object.keys(errs).length > 0) { setFamErrors(errs); return; }
+    // Optional email - validate only if entered
+    if (formData.email && formData.email.trim() && !validateEmail(formData.email)) {
+      errs.email = "Enter a valid email address";
+    }
+
+    if (Object.keys(errs).length > 0) {
+      setFamErrors(errs);
+      return;
+    }
     setFamErrors({});
     setSaving(true);
+
+    // Ensure ward_id is passed as a clean integer or valid ID to the backend, not as an object
+    const parsedWardId = parseInt(String(formData.wardId), 10);
+    const cleanWardId = !isNaN(parsedWardId) && parsedWardId > 0 ? parsedWardId : String(formData.wardId).trim();
+
     try {
       if (photoFile) {
         const fd = new FormData();
-        fd.append("familyName", formData.familyName);
-        fd.append("houseName", formData.houseName);
-        fd.append("headOfFamily", formData.headOfFamily);
-        fd.append("wardId", formData.wardId);
-        fd.append("ward_id", formData.wardId);
+        fd.append("familyName", famName || houseName);
+        fd.append("houseName", houseName || famName);
+        if (formData.headOfFamily) fd.append("headOfFamily", formData.headOfFamily);
+        fd.append("wardId", String(cleanWardId));
+        fd.append("ward_id", String(cleanWardId));
         fd.append("unit", formData.unit);
         fd.append("unit_number", formData.unit_number || formData.unit);
-        fd.append("address", formData.address);
-        fd.append("phone", formData.phone);
+        if (formData.address) fd.append("address", formData.address.trim());
+        if (formData.phone) fd.append("phone", formData.phone.trim());
+        if (formData.email) fd.append("email", formData.email.trim());
         fd.append("familyPhoto", photoFile);
         await onSave(fd);
       } else {
         await onSave({
           ...formData,
-          ward_id: formData.wardId,
+          familyName: famName || houseName,
+          houseName: houseName || famName,
+          wardId: cleanWardId,
+          ward_id: cleanWardId,
           unit_number: formData.unit_number || formData.unit,
+          address: formData.address.trim(),
+          phone: formData.phone.trim(),
+          email: formData.email.trim(),
         });
       }
       onClose();
@@ -815,7 +849,7 @@ export function FamilyModal({
           </Select>
           {famErrors.unit && <p className="text-xs text-rose-500 mt-1">{famErrors.unit}</p>}
         </Field>
-        <Field label="Contact Phone">
+        <Field label="Contact Phone (Optional)">
           <Input
             placeholder="+91 98765 43210"
             value={formData.phone}
@@ -824,7 +858,17 @@ export function FamilyModal({
           />
           {famErrors.phone && <p className="text-xs text-rose-500 mt-1">{famErrors.phone}</p>}
         </Field>
-        <Field label="Full Address" className="sm:col-span-2">
+        <Field label="Email Address (Optional)">
+          <Input
+            type="email"
+            placeholder="family@devagiriparish.com"
+            value={formData.email}
+            onChange={(e) => { setFormData({ ...formData, email: e.target.value }); setFamErrors((p) => ({ ...p, email: "" })); }}
+            className={famErrors.email ? "border-rose-500/80" : ""}
+          />
+          {famErrors.email && <p className="text-xs text-rose-500 mt-1">{famErrors.email}</p>}
+        </Field>
+        <Field label="Full Address (Optional)" className="sm:col-span-2">
           <textarea
             rows={2}
             placeholder="Full postal address"
@@ -838,7 +882,7 @@ export function FamilyModal({
             label="Family Portrait"
             aspect="banner"
             onFileSelect={setPhotoFile}
-            initialUrl={initialData?.banner || initialData?.familyPhotoUrl}
+            initialUrl={getPhotoSrc(initialData?.banner || initialData?.familyPhotoUrl || initialData?.family_photo_url) || undefined}
           />
         </div>
       </div>
@@ -1279,10 +1323,10 @@ function PhotoDropzone({
   onFileSelect?: (file: File | null) => void;
   initialUrl?: string;
 }) {
-  const [preview, setPreview] = useState<string | null>(initialUrl || null);
+  const [preview, setPreview] = useState<string | null>(getPhotoSrc(initialUrl) || null);
 
   useEffect(() => {
-    if (initialUrl) setPreview(initialUrl);
+    setPreview(getPhotoSrc(initialUrl) || null);
   }, [initialUrl]);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -1303,15 +1347,22 @@ function PhotoDropzone({
       <span className="text-[12px] font-medium text-muted-foreground">{label}</span>
       {preview ? (
         <div
-          className={`relative overflow-hidden rounded-[10px] border border-border ${
+          className={`relative overflow-hidden rounded-[10px] border border-border bg-[#161922] ${
             aspect === "square" ? "h-32 w-32" : "aspect-[16/9] w-full"
           }`}
         >
-          <img src={preview} alt="preview" className="h-full w-full object-cover" />
+          <img
+            src={preview}
+            alt="preview"
+            className="h-full w-full object-cover"
+            onError={() => {
+              setPreview(null);
+            }}
+          />
           <button
             type="button"
             onClick={handleClear}
-            className="absolute right-2 top-2 flex h-7 w-7 items-center justify-center rounded-full bg-black/60 text-white backdrop-blur transition hover:bg-danger cursor-pointer"
+            className="absolute right-2 top-2 flex h-7 w-7 items-center justify-center rounded-full bg-black/60 text-white backdrop-blur transition hover:bg-danger cursor-pointer z-10"
           >
             <X className="h-3.5 w-3.5" />
           </button>
@@ -1416,9 +1467,8 @@ export function FamilyDetailsModal({
         ? (family.wardId?.ward_name || family.wardId?.wardName || `Ward #${family.wardId?.ward_number || 1}`)
         : (family.wardPatron || family.ward_name || family.wardName || (typeof family.ward === 'string' || typeof family.ward === 'number' ? `Ward #${family.ward}` : "Ward Subdivision")));
 
-  const photoUrl = typeof family.familyPhotoUrl === 'string'
-    ? family.familyPhotoUrl
-    : (typeof family.banner === 'string' ? family.banner : "https://images.unsplash.com/photo-1511895426328-dc8714191300?w=600&h=350&fit=crop&auto=format");
+  const rawPhoto = family.familyPhotoUrl || family.family_photo_url || family.banner;
+  const photoUrl = getPhotoSrc(rawPhoto);
 
   const safeMembersList = Array.isArray(members) ? members : [];
 
@@ -1442,8 +1492,22 @@ export function FamilyDetailsModal({
       <div className="space-y-5">
         {/* Family Header Banner & Info */}
         <div className="relative overflow-hidden rounded-[12px] border border-border bg-card">
-          <div className="h-32 w-full overflow-hidden bg-secondary">
-            <img src={photoUrl} alt={String(houseName)} className="h-full w-full object-cover" />
+          <div className="relative h-32 w-full overflow-hidden bg-[#161922] flex items-center justify-center">
+            <div className="absolute inset-0 flex flex-col items-center justify-center text-muted-foreground/40 bg-gradient-to-br from-[#1a1e28] to-[#12141a]">
+              <Home className="h-10 w-10 text-primary/30 mb-1" />
+              <span className="text-[11px] font-medium text-muted-foreground/60">{houseName}</span>
+            </div>
+            {photoUrl ? (
+              <img
+                src={photoUrl}
+                alt={String(houseName)}
+                className="relative z-10 h-full w-full object-cover"
+                onError={(e) => {
+                  (e.target as HTMLElement).style.display = 'none';
+                }}
+              />
+            ) : null}
+            <div className="absolute inset-0 z-20 pointer-events-none bg-gradient-to-t from-black/60 to-transparent" />
           </div>
           <div className="p-4 sm:p-5">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">

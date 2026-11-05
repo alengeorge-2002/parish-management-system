@@ -9,20 +9,28 @@ import {
   ArrowRight,
   User,
   Trash2,
+  Home,
 } from "lucide-react";
 import { Card, Pill, Button, Select, IconButton } from "../components/ui";
 import { FamilyModal, FamilyDetailsModal } from "../components/modals";
 import { useApp } from "../lib/app-context";
 import { type Family } from "../lib/data";
 import { getMemberAvatar } from "../utils/getMemberAvatar";
-import { familiesApi, wardsApi, membersApi } from "../utils/api-client";
+import { familiesApi, wardsApi, membersApi, API_BASE_URL } from "../utils/api-client";
+
+export const getPhotoSrc = (url?: string) => {
+  if (!url) return null;
+  if (url.startsWith('http') || url.startsWith('blob:') || url.startsWith('data:')) return url;
+  return `${API_BASE_URL}${url.startsWith('/') ? '' : '/'}${url}`;
+};
 
 function AvatarStack({ family, onClick }: { family: any; onClick?: () => void }) {
   const memberCount = family.memberCount || 0;
+  const photo = getPhotoSrc(family.familyPhotoUrl || family.banner);
   const avatars = [
-    getMemberAvatar({ gender: "male", familyPhoto: family.familyPhotoUrl || family.banner }),
-    getMemberAvatar({ gender: "female", familyPhoto: family.familyPhotoUrl || family.banner }),
-    getMemberAvatar({ gender: "male", familyPhoto: family.familyPhotoUrl || family.banner }),
+    getMemberAvatar({ gender: "male", familyPhoto: photo || undefined }),
+    getMemberAvatar({ gender: "female", familyPhoto: photo || undefined }),
+    getMemberAvatar({ gender: "male", familyPhoto: photo || undefined }),
   ];
   const shown = avatars.slice(0, 4);
   const extra = memberCount - shown.length;
@@ -171,7 +179,8 @@ export default function Families() {
               wardPatron: wardName,
               phone: phoneNum,
               memberCount: f.memberCount || f.member_count || 0,
-              banner: f.familyPhotoUrl || f.family_photo_url || f.banner || "",
+              familyPhotoUrl: f.familyPhotoUrl || f.family_photo_url || f.familyPhoto || f.banner || "",
+              banner: f.familyPhotoUrl || f.family_photo_url || f.familyPhoto || f.banner || "",
               avatars: [],
               raw: f,
             };
@@ -308,14 +317,26 @@ export default function Families() {
         <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 xl:grid-cols-3">
           {filtered.map((f) => (
             <Card key={typeof f.id === 'object' ? (f.id?._id || String(f.id)) : String(f.id)} glow className="overflow-hidden">
-              <div className="relative aspect-[16/9] w-full bg-secondary">
-                <img
-                  src={typeof f.banner === 'string' ? f.banner : "https://images.unsplash.com/photo-1511895426328-dc8714191300?w=600&h=350&fit=crop&auto=format"}
-                  alt={typeof f.house === 'object' ? (f.house?.house_name || f.house?.familyName || 'Household') : String(f.house || 'Household')}
-                  className="h-full w-full object-cover"
-                />
-                <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
-                <div className="absolute bottom-3 left-3 flex items-center gap-1.5 flex-wrap">
+              <div className="relative aspect-[16/9] w-full bg-[#161922] flex items-center justify-center overflow-hidden">
+                {/* Fallback stylized household placeholder */}
+                <div className="absolute inset-0 flex flex-col items-center justify-center text-muted-foreground/40 bg-gradient-to-br from-[#1a1e28] to-[#12141a]">
+                  <Home className="h-10 w-10 text-primary/30 mb-1" />
+                  <span className="text-[11px] font-medium tracking-wide text-muted-foreground/60">
+                    {typeof f.house === 'object' ? (f.house?.house_name || f.house?.familyName || 'Household') : String(f.house || 'Household')}
+                  </span>
+                </div>
+                {getPhotoSrc(f.familyPhotoUrl || f.banner) ? (
+                  <img
+                    src={getPhotoSrc(f.familyPhotoUrl || f.banner) || '/default-family-avatar.png'}
+                    onError={(e) => {
+                      (e.target as HTMLElement).style.display = 'none';
+                    }}
+                    alt={typeof f.house === 'object' ? (f.house?.house_name || f.house?.familyName || 'Family') : String(f.house || 'Family')}
+                    className="relative z-10 h-full w-full object-cover"
+                  />
+                ) : null}
+                <div className="absolute inset-0 z-20 pointer-events-none bg-gradient-to-t from-black/70 via-black/20 to-transparent" />
+                <div className="absolute bottom-3 left-3 z-30 flex items-center gap-1.5 flex-wrap">
                   <Pill tone="gold">
                     #{f.wardNumber || (typeof f.ward === 'object' ? (f.ward?.ward_number || f.ward?.wardNumber) : f.ward)} · {f.wardName || (typeof f.ward === 'object' ? (f.ward?.ward_name || f.ward?.wardName) : f.wardPatron)}
                   </Pill>
