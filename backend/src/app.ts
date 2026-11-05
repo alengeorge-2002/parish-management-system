@@ -1,6 +1,7 @@
 import express, { Request, Response, NextFunction } from 'express';
 import cors from 'cors';
 import path from 'path';
+import fs from 'fs';
 import apiRouter from './routes';
 
 const app = express();
@@ -26,7 +27,21 @@ app.use(cors({
 }));
 
 app.use(express.json());
-app.use('/uploads', express.static(path.join(process.cwd(), 'uploads')));
+
+// Resilient uploads path detection across local, root-workspace, and deployed containers
+const candidateUploadDirs = [
+  path.join(process.cwd(), 'uploads'),
+  path.join(process.cwd(), 'backend/uploads'),
+  path.join(__dirname, '../uploads'),
+  path.join(__dirname, '../../uploads'),
+];
+const uploadsDir = candidateUploadDirs.find((dir) => fs.existsSync(dir)) || path.join(process.cwd(), 'uploads');
+if (!fs.existsSync(uploadsDir)) {
+  try { fs.mkdirSync(uploadsDir, { recursive: true }); } catch (_) {}
+}
+
+app.use('/uploads', express.static(uploadsDir));
+app.use('/api/uploads', express.static(uploadsDir));
 
 // Normalize URL to handle redundant slashes or double '/api/api/'
 app.use((req: Request, _res: Response, next: NextFunction) => {
