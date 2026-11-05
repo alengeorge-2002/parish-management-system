@@ -296,3 +296,7 @@ export const getDirectoryWards = async (_req: Request, res: Response): Promise<v
     res.status(500).json({ error: error.message || 'Error fetching directory wards' });
   }
 };
+
+export const getDirectory = search;
+export const getFamilies = getDirectoryFamilies;
+export const getAllWards = getDirectoryWards;

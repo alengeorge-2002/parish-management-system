@@ -637,6 +637,8 @@ export const getAllFamilies = async (_req: Request, res: Response) => {
   }
 };
 
+export const getFamilies = getAllFamilies;
+
 export const getFamilyById = async (req: Request, res: Response): Promise<any> => {
   try {
     const id = parseId(req.params.id);

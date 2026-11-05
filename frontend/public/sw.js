@@ -1,4 +1,4 @@
-const CACHE_NAME = 'devagiri-parish-pwa-v1';
+const CACHE_NAME = 'devagiri-parish-pwa-v2';
 const STATIC_ASSETS = [
   '/',
   '/manifest.json',
@@ -46,11 +46,22 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
+  // Strictly bypass service worker cache for all API requests to ensure fresh live data
+  if (url.pathname.startsWith('/api') || url.pathname.includes('/api/')) {
+    return;
+  }
+
   event.respondWith(
     fetch(event.request)
       .then((networkResponse) => {
-        // If response is valid, clone and save to cache
-        if (networkResponse && networkResponse.status === 200 && networkResponse.type === 'basic') {
+        // If response is valid, clone and save to cache (static assets only)
+        if (
+          networkResponse &&
+          networkResponse.status === 200 &&
+          networkResponse.type === 'basic' &&
+          !url.pathname.startsWith('/api') &&
+          !url.pathname.includes('/api/')
+        ) {
           const responseToCache = networkResponse.clone();
           caches.open(CACHE_NAME).then((cache) => {
             cache.put(event.request, responseToCache);
@@ -58,7 +69,11 @@ self.addEventListener('fetch', (event) => {
         }
         return networkResponse;
       })
-      .catch(async () => {
+      .catch(async (err) => {
+        // Never serve cached fallback for API requests
+        if (url.pathname.startsWith('/api') || url.pathname.includes('/api/')) {
+          throw err;
+        }
         console.log('[Service Worker] Fetch failed; serving from cache:', event.request.url);
         const cachedResponse = await caches.match(event.request);
         if (cachedResponse) {

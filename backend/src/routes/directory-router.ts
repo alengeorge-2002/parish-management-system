@@ -1,5 +1,6 @@
 import { Router } from 'express';
-import { search, getDirectoryFamilies, getDirectoryWards } from '../controllers/directory-controller';
+import { search, getDirectory } from '../controllers/directory-controller';
+import { getFamilies, getAllWards } from '../controllers/admin-controller';
 import { getClergy } from '../controllers/clergy-controller';
 import { getAllReligiousHouses } from '../controllers/religious-house-controller';
 import { getMinistriesDirectory } from '../controllers/ministry-controller';
@@ -8,10 +9,10 @@ import { getAllSeatsAdmin, getQuickContacts } from '../controllers/parish-counci
 const router = Router();
 
 // Route for dynamic directory search with PostgreSQL joins across visible parishioners, families, and wards
-router.get('/', search);
+router.get('/', getDirectory);
 router.get('/search', search);
-router.get('/families', getDirectoryFamilies);
-router.get('/wards', getDirectoryWards);
+router.get('/families', getFamilies);
+router.get('/wards', getAllWards);
 router.get('/clergy', getClergy);
 router.get('/religious-houses', getAllReligiousHouses);
 router.get('/ministries', getMinistriesDirectory);

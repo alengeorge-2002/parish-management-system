@@ -39,8 +39,9 @@ if (Platform.OS === 'web' && typeof window !== 'undefined') {
   if ('serviceWorker' in navigator) {
     window.addEventListener('load', () => {
       navigator.serviceWorker
-        .register('/sw.js')
+        .register('/sw.js', { updateViaCache: 'none' })
         .then((registration) => {
+          registration.update().catch(() => {});
           console.log('[PWA] ServiceWorker registered with scope:', registration.scope);
         })
         .catch((err) => {
