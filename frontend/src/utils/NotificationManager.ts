@@ -1,4 +1,4 @@
-import { API_BASE_URL } from "../config";
+import { API_BASE_URL, apiFetch } from "../config";
 
 function urlBase64ToUint8Array(base64String: string): Uint8Array {
   const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
@@ -39,8 +39,7 @@ export async function initializePushNotifications(): Promise<boolean> {
     }
 
     // 3. Fetch VAPID Public Key from backend API
-    const backendUrl = API_BASE_URL || "http://localhost:5000/api";
-    const keyRes = await fetch(`${backendUrl}/notifications/vapid-key`);
+    const keyRes = await apiFetch(`${API_BASE_URL}/api/notifications/vapid-key`);
     if (!keyRes.ok) {
       throw new Error(`Failed to fetch VAPID key: ${keyRes.statusText}`);
     }
@@ -62,7 +61,7 @@ export async function initializePushNotifications(): Promise<boolean> {
 
     // 5. Send subscription JSON payload to backend endpoint
     const subPayload = subscription.toJSON();
-    const saveRes = await fetch(`${backendUrl}/notifications/subscribe`, {
+    const saveRes = await apiFetch(`${API_BASE_URL}/api/notifications/subscribe`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",

@@ -19,6 +19,9 @@ export const connectDB = async (): Promise<Pool> => {
         ALTER TABLE members ADD COLUMN IF NOT EXISTS is_directory_visible BOOLEAN DEFAULT true;
         ALTER TABLE members ADD COLUMN IF NOT EXISTS role VARCHAR(50) DEFAULT 'parishioner';
         ALTER TABLE app_users ADD COLUMN IF NOT EXISTS password_hash VARCHAR(255);
+        ALTER TABLE announcements ADD COLUMN IF NOT EXISTS is_active BOOLEAN DEFAULT true;
+        ALTER TABLE announcements ADD COLUMN IF NOT EXISTS poster_url TEXT;
+        ALTER TABLE announcements ADD COLUMN IF NOT EXISTS expiry_date TIMESTAMP;
       `);
     } catch (e) {
       console.warn('Schema check warning:', e);

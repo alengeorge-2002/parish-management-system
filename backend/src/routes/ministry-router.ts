@@ -18,6 +18,8 @@ const router = Router();
 
 // Public route for active groups directory
 router.get('/directory/ministries', getMinistriesDirectory);
+router.get('/ministries', getMinistriesDirectory);
+router.get('/', getMinistriesDirectory);
 
 // Direct ministry member management routes (supporting /api/ministries/:id/members)
 router.post('/ministries/:id/members', addMemberToMinistry);

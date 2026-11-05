@@ -25,6 +25,9 @@ import {
   updateMember,
   deleteMember,
 } from '../controllers/admin-controller';
+import { getClergy } from '../controllers/clergy-controller';
+import { getAllReligiousHouses } from '../controllers/religious-house-controller';
+import { getMinistriesDirectory } from '../controllers/ministry-controller';
 import { search } from '../controllers/directory-controller';
 import { getQuickContacts } from '../controllers/parish-council-controller';
 import { validateCreateFamily, validateCreateMember } from '../middleware/validate';
@@ -55,11 +58,16 @@ router.post('/members', validateCreateMember, createMember);
 router.put('/members/:id', updateMember);
 router.delete('/members/:id', deleteMember);
 
+// Direct public directory endpoints
+router.get('/clergy', getClergy);
+router.get('/clergy/quick-contacts', getQuickContacts);
+router.get('/religious-houses', getAllReligiousHouses);
+router.get('/ministries', getMinistriesDirectory);
+
 router.get('/health', (_req, res) => {
   res.status(200).json({ status: 'ok', uptime: process.uptime(), timestamp: new Date().toISOString() });
 });
 router.get('/parishioners', search);
-router.get('/clergy/quick-contacts', getQuickContacts);
 
 // Module routers
 router.use('/auth', authRouter);
@@ -76,7 +84,9 @@ router.use('/calendar', calendarRouter);
 router.use('/readings', calendarRouter);
 router.use('/liturgical', calendarRouter);
 router.use('/notifications', notificationRouter);
+router.use('/ministries', ministryRouter);
 router.use('/', ministryRouter);
+router.use('/parish-council', parishCouncilRouter);
 router.use('/', parishCouncilRouter);
 
 export default router;

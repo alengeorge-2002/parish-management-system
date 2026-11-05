@@ -138,6 +138,10 @@ CREATE TABLE IF NOT EXISTS announcements (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
+ALTER TABLE announcements ADD COLUMN IF NOT EXISTS is_active BOOLEAN DEFAULT true;
+ALTER TABLE announcements ADD COLUMN IF NOT EXISTS poster_url TEXT;
+ALTER TABLE announcements ADD COLUMN IF NOT EXISTS expiry_date TIMESTAMP;
+
 INSERT INTO announcements (title, content, image_url, priority) VALUES 
 ('Solemnity of Corpus Christi Feast', 'Join us for the Eucharistic Procession around the parish grounds immediately following the 10:00 AM Solemn Mass this Sunday.', 'https://images.unsplash.com/photo-1548625361-155deee26291?auto=format&fit=crop&w=800&q=80', 'high'),
 ('Catechism Classes Registration', 'Registration for the new academic year of Catechism classes is now open for children ages 6 to 16. Contact the parish office to enroll.', 'https://images.unsplash.com/photo-1503676260728-1c00da094a0b?auto=format&fit=crop&w=800&q=80', 'medium'),

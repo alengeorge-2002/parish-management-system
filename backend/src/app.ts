@@ -28,13 +28,18 @@ app.use(cors({
 app.use(express.json());
 app.use('/uploads', express.static(path.join(process.cwd(), 'uploads')));
 
+// Normalize URL to handle redundant slashes or double '/api/api/'
+app.use((req: Request, _res: Response, next: NextFunction) => {
+  if (req.url.startsWith('/api/api/')) {
+    req.url = req.url.replace(/^\/api\/api\//, '/api/');
+  }
+  next();
+});
+
 // Dedicated Health check route
 app.get('/api/health', (_req: Request, res: Response) => {
   res.status(200).json({ status: 'ok', uptime: process.uptime(), timestamp: new Date().toISOString() });
 });
-
-// Mount central API routes
-app.use('/api', apiRouter);
 
 // Fallback root route indicating API is active
 app.get('/', (_req: Request, res: Response) => {
@@ -45,5 +50,9 @@ app.get('/', (_req: Request, res: Response) => {
     timestamp: new Date().toISOString()
   });
 });
+
+// Mount central API routes under /api and alias under root /
+app.use('/api', apiRouter);
+app.use('/', apiRouter);
 
 export default app;

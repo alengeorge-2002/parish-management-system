@@ -34,6 +34,9 @@ export async function apiFetch(input: RequestInfo | URL, init?: RequestInit): Pr
   if (urlString.includes(':3000')) {
     urlString = urlString.replace(':3000', ':5000');
   }
+  if (urlString.includes('/api/api/')) {
+    urlString = urlString.replace(/\/api\/api\//g, '/api/');
+  }
 
   const newInit: RequestInit = { ...init };
   

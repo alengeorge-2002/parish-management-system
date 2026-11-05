@@ -54,7 +54,13 @@ export const fetchApi = async (endpoint: string, options: RequestInit = {}) => {
     headers.set('Authorization', `Bearer ${session.token}`);
   }
   
-  const response = await fetch(`${BASE_URL}${endpoint}`, {
+  const normalizedEndpoint = endpoint.startsWith('/api/') ? endpoint.slice(4) : endpoint;
+  let url = `${BASE_URL}${normalizedEndpoint}`;
+  if (url.includes('/api/api/')) {
+    url = url.replace(/\/api\/api\//g, '/api/');
+  }
+
+  const response = await fetch(url, {
     ...options,
     headers,
   });
