@@ -23,6 +23,8 @@ export default function DirectoryScreen() {
   const [familiesData, setFamiliesData] = useState<any[]>([]);
   const [membersData, setMembersData] = useState<any[]>([]);
   const [wards, setWards] = useState<string[]>(["All"]);
+  const [wardsList, setWardsList] = useState<any[]>([]);
+  const [loadingDirectory, setLoadingDirectory] = useState<boolean>(true);
   const [clergyData, setClergyData] = useState<any[]>([]);
   const [housesData, setHousesData] = useState<any[]>([]);
   const [selectedHouseId, setSelectedHouseId] = useState<number | null>(null);
@@ -150,6 +152,7 @@ export default function DirectoryScreen() {
         if (wardsRes && wardsRes.ok) {
           const rawWardsList = await wardsRes.json();
           wardsList = Array.isArray(rawWardsList) ? rawWardsList : [];
+          setWardsList(wardsList);
           const uniqueWards = ["All", ...wardsList.map((w: any) => w.ward_name || w.wardName).filter(Boolean)];
           setWards(uniqueWards);
         }
@@ -201,17 +204,59 @@ export default function DirectoryScreen() {
         }
       } catch (error) {
         console.warn('Failed to fetch live directory data from API:', error);
+      } finally {
+        setLoadingDirectory(false);
       }
     };
 
     fetchDirectoryData();
   }, []);
 
+  const isMl = (t('wards-count') || '').includes('വാർഡുകൾ');
+
+  const wardCount = wardsList.length > 0 
+    ? wardsList.length 
+    : (wards.length > 1 ? wards.length - 1 : (loadingDirectory ? null : 0));
+
+  const wardSubtext = loadingDirectory && wardCount === null
+    ? "..."
+    : (isMl 
+        ? `${wardCount} വാർഡുകൾ` 
+        : `${wardCount} ${wardCount === 1 ? 'Ward' : 'Wards'}`);
+
+  const ministryCount = ministriesData.length;
+  const ministrySubtext = loadingDirectory && ministryCount === 0
+    ? "..."
+    : (isMl 
+        ? `${ministryCount} ഗ്രൂപ്പുകൾ` 
+        : `${ministryCount} ${ministryCount === 1 ? 'Group' : 'Groups'}`);
+
+  const clergyCount = clergyData.length;
+  const clergySubtext = loadingDirectory && clergyCount === 0
+    ? "..."
+    : (isMl 
+        ? `${clergyCount} വൈദികർ` 
+        : `${clergyCount} ${clergyCount === 1 ? 'Priest / Religious' : 'Priests & Religious'}`);
+
+  const conventCount = housesData.length;
+  const conventSubtext = loadingDirectory && conventCount === 0
+    ? "..."
+    : (isMl 
+        ? `${conventCount} ഭവനങ്ങൾ` 
+        : `${conventCount} ${conventCount === 1 ? 'House' : 'Houses'}`);
+
+  const councilCount = parishCouncilList.length;
+  const councilSubtext = loadingDirectory && councilCount === 0
+    ? "..."
+    : (isMl 
+        ? `${councilCount} അംഗങ്ങൾ` 
+        : `${councilCount} ${councilCount === 1 ? 'Member' : 'Members'}`);
+
   const topCategories = [
     { 
       id: 'convent',
       title: t('st-josephs-convent'), 
-      subtext: t('convent-members-count'), 
+      subtext: conventSubtext, 
       icon: "business-outline",
       iconType: "ionicons",
       hasViewLink: true
@@ -219,14 +264,14 @@ export default function DirectoryScreen() {
     { 
       id: 'religious',
       title: t('priests-and-religious'), 
-      subtext: t('priests-count'), 
+      subtext: clergySubtext, 
       icon: "person-outline",
       iconType: "ionicons"
     },
     { 
       id: 'council',
       title: t('parish-council-title'), 
-      subtext: t('council-members-count'), 
+      subtext: councilSubtext, 
       icon: "crown-outline",
       iconType: "material"
     }
@@ -236,14 +281,14 @@ export default function DirectoryScreen() {
     { 
       id: 'ministries',
       title: t('ministries-title'), 
-      subtext: t('groups-count'), 
+      subtext: ministrySubtext, 
       icon: "heart-outline",
       iconType: "ionicons"
     },
     { 
       id: 'ward',
       title: t('ward-directory-title'), 
-      subtext: t('wards-count'), 
+      subtext: wardSubtext, 
       icon: "home-outline",
       iconType: "ionicons"
     }

@@ -297,6 +297,55 @@ export const getDirectoryWards = async (_req: Request, res: Response): Promise<v
   }
 };
 
+/**
+ * GET /api/directory/summary or /api/directory/meta
+ * Returns live database counts of wards, families, members, clergy, religious houses, ministries, and parish council.
+ */
+export const getDirectorySummary = async (_req: Request, res: Response): Promise<void> => {
+  try {
+    const [wardsRes, familiesRes, membersRes, clergyRes, housesRes, ministriesRes, councilRes] = await Promise.all([
+      pool.query(`SELECT COUNT(*)::int AS count FROM wards`),
+      pool.query(`SELECT COUNT(*)::int AS count FROM families`),
+      pool.query(`SELECT COUNT(*)::int AS count FROM members WHERE COALESCE(is_directory_visible, true) = true AND COALESCE(role, 'parishioner') = 'parishioner'`),
+      pool.query(`SELECT COUNT(*)::int AS count FROM clergy_directory`),
+      pool.query(`SELECT COUNT(*)::int AS count FROM religious_houses`),
+      pool.query(`SELECT COUNT(*)::int AS count FROM organizations`),
+      pool.query(`SELECT COUNT(*)::int AS count FROM parish_council`),
+    ]);
+
+    const wardCount = wardsRes.rows[0]?.count || 0;
+    const familyCount = familiesRes.rows[0]?.count || 0;
+    const memberCount = membersRes.rows[0]?.count || 0;
+    const clergyCount = clergyRes.rows[0]?.count || 0;
+    const religiousHouseCount = housesRes.rows[0]?.count || 0;
+    const ministryCount = ministriesRes.rows[0]?.count || 0;
+    const councilSeatCount = councilRes.rows[0]?.count || 0;
+
+    res.status(200).json({
+      status: 'ok',
+      counts: {
+        wards: wardCount,
+        families: familyCount,
+        members: memberCount,
+        clergy: clergyCount,
+        religiousHouses: religiousHouseCount,
+        ministries: ministryCount,
+        parishCouncil: councilSeatCount,
+      },
+      wardCount,
+      familyCount,
+      memberCount,
+      clergyCount,
+      religiousHouseCount,
+      ministryCount,
+      councilSeatCount,
+    });
+  } catch (error: any) {
+    console.error('Error fetching directory summary:', error);
+    res.status(500).json({ error: error.message || 'Error fetching directory summary' });
+  }
+};
+
 export const getDirectory = search;
 export const getFamilies = getDirectoryFamilies;
 export const getAllWards = getDirectoryWards;
