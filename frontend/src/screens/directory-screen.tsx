@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, TextInput, TouchableOpacity, ScrollView, StyleSheet, Platform, Alert, Linking, Image } from 'react-native';
+import React, { useState, useEffect, useCallback } from 'react';
+import { View, Text, TextInput, TouchableOpacity, ScrollView, StyleSheet, Platform, Alert, Linking, Image, RefreshControl } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import * as SecureStore from 'expo-secure-store';
 import { globalStyles, colors as staticColors, typography } from '../styles/accessible-theme';
@@ -8,6 +8,12 @@ import { useLanguage } from '../localization/language-context';
 import { API_BASE_URL, apiFetch } from '../config';
 import { useNavigation } from '@react-navigation/native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
+
+const DEFAULT_FALLBACK_CONTACTS = [
+  { role: 'Vicar', role_title: 'Vicar', name: 'Rev. Fr. Joseph Mathew', phone: '+91 94471 00001', phone_number: '+91 94471 00001' },
+  { role: 'Assistant Vicar', role_title: 'Assistant Vicar', name: 'Rev. Fr. George Varghese', phone: '+91 94471 00002', phone_number: '+91 94471 00002' },
+  { role: 'Parish Secretary', role_title: 'Parish Secretary', name: 'Adv. Mary Antony', phone: '+91 94471 00003', phone_number: '+91 94471 00003' },
+];
 
 export default function DirectoryScreen() {
   const { colors, isDark } = useTheme();
@@ -25,16 +31,16 @@ export default function DirectoryScreen() {
   const [wards, setWards] = useState<string[]>(["All"]);
   const [wardsList, setWardsList] = useState<any[]>([]);
   const [loadingDirectory, setLoadingDirectory] = useState<boolean>(true);
+  const [refreshing, setRefreshing] = useState<boolean>(false);
   const [clergyData, setClergyData] = useState<any[]>([]);
   const [housesData, setHousesData] = useState<any[]>([]);
   const [selectedHouseId, setSelectedHouseId] = useState<number | null>(null);
   const [ministriesData, setMinistriesData] = useState<any[]>([]);
   const [selectedMinistryId, setSelectedMinistryId] = useState<number | null>(null);
   const [parishCouncilList, setParishCouncilList] = useState<any[]>([]);
-  const [quickContacts, setQuickContacts] = useState<any[]>([]);
+  const [quickContacts, setQuickContacts] = useState<any[]>(DEFAULT_FALLBACK_CONTACTS);
 
-  useEffect(() => {
-    const fetchDirectoryData = async () => {
+  const fetchDirectoryData = useCallback(async () => {
       let token = null;
       try {
         token = await SecureStore.getItemAsync('user_token') || localStorage.getItem('user_token');
@@ -137,7 +143,7 @@ export default function DirectoryScreen() {
 
         if (quickContactsRes && quickContactsRes.ok) {
           const contactsList = await quickContactsRes.json();
-          setQuickContacts(Array.isArray(contactsList) ? contactsList : []);
+          setQuickContacts(Array.isArray(contactsList) && contactsList.length > 0 ? contactsList : DEFAULT_FALLBACK_CONTACTS);
         }
 
         if (membersRes && membersRes.ok) {
@@ -206,11 +212,26 @@ export default function DirectoryScreen() {
         console.warn('Failed to fetch live directory data from API:', error);
       } finally {
         setLoadingDirectory(false);
+        setRefreshing(false);
       }
-    };
-
-    fetchDirectoryData();
   }, []);
+
+  useEffect(() => {
+    fetchDirectoryData();
+  }, [fetchDirectoryData]);
+
+  // Immediately refresh directory and quick contacts when returning to this tab
+  useEffect(() => {
+    const unsubscribe = (navigation as any)?.addListener?.('focus', () => {
+      fetchDirectoryData();
+    });
+    return unsubscribe;
+  }, [navigation, fetchDirectoryData]);
+
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    await fetchDirectoryData();
+  }, [fetchDirectoryData]);
 
   const isMl = (t('wards-count') || '').includes('വാർഡുകൾ');
 
@@ -324,7 +345,13 @@ export default function DirectoryScreen() {
   };
 
   const handlePhonePress = (phone: string) => {
-    Linking.openURL(`tel:${phone}`).catch(err => {
+    if (!phone) return;
+    const cleanPhone = phone.trim();
+    if (Platform.OS === 'web' && typeof window !== 'undefined') {
+      window.location.href = `tel:${cleanPhone}`;
+      return;
+    }
+    Linking.openURL(`tel:${cleanPhone}`).catch(err => {
       Alert.alert("Error", "Could not initiate phone call: " + err.message);
     });
   };
@@ -539,6 +566,14 @@ export default function DirectoryScreen() {
       <ScrollView 
         contentContainerStyle={styles.scrollContainer} 
         showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            tintColor={colors.gold || '#F4C430'}
+            colors={[colors.gold || '#F4C430']}
+          />
+        }
       >
         {/* Back Button (64px target) for sub-views inside details view */}
         {selectedProfile !== null && (
@@ -1203,28 +1238,34 @@ export default function DirectoryScreen() {
                     {/* Quick Contacts Section */}
                     <Text style={styles['quick-contacts-header']}>{t('quick-contacts')}</Text>
                     <View style={styles['quick-contacts-card']}>
-                      {quickContacts.map((contact, index) => {
-                        const roleKey = contact.role_title.toLowerCase().replace(/\s+/g, '-');
+                      {(quickContacts.length > 0 ? quickContacts : DEFAULT_FALLBACK_CONTACTS).map((contact, index, arr) => {
+                        const roleTitle = contact.role || contact.role_title || '';
+                        const roleKey = roleTitle.toLowerCase().replace(/\s+/g, '-');
+                        const translated = t(roleKey);
+                        const displayRole = translated && translated !== roleKey ? translated : roleTitle;
+                        const phone = contact.phone || contact.phone_number || '';
+
                         return (
-                          <View key={contact.role_title}>
+                          <View key={contact.role || contact.role_title || index}>
                             <View style={styles['quick-contact-row']}>
                               <View style={styles['quick-contact-icon-box']}>
                                 <Ionicons name="call-outline" size={22} color={colors.darkGold} />
                               </View>
                               <View style={styles['quick-contact-info']}>
-                                <Text style={styles['quick-contact-title']}>{t(roleKey)}</Text>
+                                <Text style={styles['quick-contact-title']}>{displayRole}</Text>
                                 <Text style={styles['quick-contact-sub']}>{contact.name}</Text>
                               </View>
                               <TouchableOpacity 
                                 style={styles['quick-call-btn']}
-                                onPress={() => handlePhonePress(contact.phone_number)}
+                                onPress={() => handlePhonePress(phone)}
+                                {...({ href: phone ? `tel:${phone}` : undefined } as any)}
                                 accessibilityLabel={`Call ${contact.name}`}
                                 accessibilityRole="button"
                               >
                                 <Text style={styles['quick-call-btn-text']}>{t('button-call') || 'Call'}</Text>
                               </TouchableOpacity>
                             </View>
-                            {index < quickContacts.length - 1 && (
+                            {index < arr.length - 1 && (
                               <View style={styles['quick-contact-divider']} />
                             )}
                           </View>

@@ -251,56 +251,155 @@ export const deleteSeat = async (req: Request, res: Response): Promise<void> => 
   }
 };
 
+const DEFAULT_CONTACTS = {
+  vicar: { title: 'Vicar', name: 'Rev. Fr. Joseph Mathew', phone: '+91 94471 00001' },
+  assistantVicar: { title: 'Assistant Vicar', name: 'Rev. Fr. George Varghese', phone: '+91 94471 00002' },
+  secretary: { title: 'Parish Secretary', name: 'Adv. Mary Antony', phone: '+91 94471 00003' }
+};
+
 /**
  * GET /api/directory/quick-contacts
+ * Returns live parish leadership quick contacts (Vicar, Assistant Vicar, Parish Secretary)
+ * querying clergy and parish council with default fallbacks.
  */
 export const getQuickContacts = async (_req: Request, res: Response): Promise<void> => {
   try {
-    const result = await pool.query(
-      `SELECT pc.role_title,
-              COALESCE(pc.occupant_name, CONCAT(m.first_name, ' ', m.last_name)) as name,
-              COALESCE(pc.phone, m.phone_number) as phone_number,
-              m.email
-       FROM parish_council pc
-       LEFT JOIN members m ON pc.member_id = m.id
-       WHERE pc.role_title IN ('Vicar', 'Assistant Vicar', 'Parish Secretary')
-       ORDER BY pc.display_order ASC`
-    );
+    // 1. Vicar: Look up in clergy where role/designation ILIKE '%vicar%' (exclude 'asst' or 'assistant')
+    const vicarQuery = `
+      SELECT name, COALESCE(phone_number, '') AS phone
+      FROM clergy
+      WHERE (designation ILIKE '%vicar%' OR role_type ILIKE '%vicar%')
+        AND designation NOT ILIKE '%asst%'
+        AND designation NOT ILIKE '%assistant%'
+        AND role_type NOT ILIKE '%asst%'
+        AND role_type NOT ILIKE '%assistant%'
+      ORDER BY display_order ASC, id ASC
+      LIMIT 1
+    `;
 
-    const contacts = result.rows;
-    const roles = ['Vicar', 'Assistant Vicar', 'Parish Secretary'];
-    const finalContacts = roles.map(role => {
-      const found = contacts.find((c: any) => c.role_title === role);
-      if (found && found.phone_number && found.phone_number.trim() !== '') return found;
+    // 2. Assistant Vicar: Look up in clergy where role/designation ILIKE '%asst%' OR role/designation ILIKE '%assistant%'
+    const asstVicarQuery = `
+      SELECT name, COALESCE(phone_number, '') AS phone
+      FROM clergy
+      WHERE (
+        designation ILIKE '%asst%' OR designation ILIKE '%assistant%' OR designation ILIKE '%associate%' OR
+        role_type ILIKE '%asst%' OR role_type ILIKE '%assistant%' OR role_type ILIKE '%associate%'
+      )
+      ORDER BY display_order ASC, id ASC
+      LIMIT 1
+    `;
 
-      if (role === 'Vicar') {
-        return {
-          role_title: 'Vicar',
-          name: 'Rev. Fr. Joseph Mathew',
-          phone_number: '+919845000001',
-          email: 'pp.stjosephdevagiri@gmail.com',
-        };
-      } else if (role === 'Assistant Vicar') {
-        return {
-          role_title: 'Assistant Vicar',
-          name: 'Rev. Fr. George Varghese',
-          phone_number: '+919845000002',
-          email: 'assoc.stjosephdevagiri@gmail.com',
-        };
-      } else {
-        return {
-          role_title: 'Parish Secretary',
-          name: 'Adv. Mary Antony',
-          phone_number: '+914952701234',
-          email: 'mary.antony@gmail.com',
-        };
-      }
-    });
+    // 3. Parish Secretary: Look up in parish_council or clergy where role/designation ILIKE '%secretary%'
+    const councilSecretaryQuery = `
+      SELECT COALESCE(pc.occupant_name, CONCAT(m.first_name, ' ', m.last_name)) AS name,
+             COALESCE(pc.phone, m.phone_number, '') AS phone
+      FROM parish_council pc
+      LEFT JOIN members m ON pc.member_id = m.id
+      WHERE pc.role_title ILIKE '%secretary%'
+      ORDER BY pc.display_order ASC, pc.id ASC
+      LIMIT 1
+    `;
+
+    const clergySecretaryQuery = `
+      SELECT name, COALESCE(phone_number, '') AS phone
+      FROM clergy
+      WHERE designation ILIKE '%secretary%' OR role_type ILIKE '%secretary%'
+      ORDER BY display_order ASC, id ASC
+      LIMIT 1
+    `;
+
+    const [vicarRes, asstVicarRes, councilSecRes, clergySecRes] = await Promise.all([
+      pool.query(vicarQuery).catch(() => pool.query(`
+        SELECT name, COALESCE(phone_number, '') AS phone
+        FROM clergy_directory
+        WHERE (designation ILIKE '%vicar%' OR role_type ILIKE '%vicar%')
+          AND designation NOT ILIKE '%asst%' AND designation NOT ILIKE '%assistant%'
+          AND role_type NOT ILIKE '%asst%' AND role_type NOT ILIKE '%assistant%'
+        ORDER BY display_order ASC, id ASC LIMIT 1
+      `)).catch(() => ({ rows: [] })),
+      pool.query(asstVicarQuery).catch(() => pool.query(`
+        SELECT name, COALESCE(phone_number, '') AS phone
+        FROM clergy_directory
+        WHERE (
+          designation ILIKE '%asst%' OR designation ILIKE '%assistant%' OR designation ILIKE '%associate%' OR
+          role_type ILIKE '%asst%' OR role_type ILIKE '%assistant%' OR role_type ILIKE '%associate%'
+        )
+        ORDER BY display_order ASC, id ASC LIMIT 1
+      `)).catch(() => ({ rows: [] })),
+      pool.query(councilSecretaryQuery).catch(() => ({ rows: [] })),
+      pool.query(clergySecretaryQuery).catch(() => pool.query(`
+        SELECT name, COALESCE(phone_number, '') AS phone
+        FROM clergy_directory
+        WHERE designation ILIKE '%secretary%' OR role_type ILIKE '%secretary%'
+        ORDER BY display_order ASC, id ASC LIMIT 1
+      `)).catch(() => ({ rows: [] })),
+    ]);
+
+    // Build Vicar
+    const vicarRow = vicarRes.rows.find((r: any) => r.phone && r.phone.trim() !== '') || vicarRes.rows[0];
+    const vicarName = vicarRow?.name?.trim() || DEFAULT_CONTACTS.vicar.name;
+    const vicarPhone = (vicarRow?.phone && vicarRow.phone.trim() !== '') ? vicarRow.phone.trim() : DEFAULT_CONTACTS.vicar.phone;
+
+    // Build Assistant Vicar
+    const asstRow = asstVicarRes.rows.find((r: any) => r.phone && r.phone.trim() !== '') || asstVicarRes.rows[0];
+    const asstName = asstRow?.name?.trim() || DEFAULT_CONTACTS.assistantVicar.name;
+    const asstPhone = (asstRow?.phone && asstRow.phone.trim() !== '') ? asstRow.phone.trim() : DEFAULT_CONTACTS.assistantVicar.phone;
+
+    // Build Secretary
+    const secRow = (councilSecRes.rows[0]?.phone?.trim() ? councilSecRes.rows[0] : (clergySecRes.rows[0]?.phone?.trim() ? clergySecRes.rows[0] : (councilSecRes.rows[0] || clergySecRes.rows[0])));
+    const secName = secRow?.name?.trim() || DEFAULT_CONTACTS.secretary.name;
+    const secPhone = (secRow?.phone && secRow.phone.trim() !== '') ? secRow.phone.trim() : DEFAULT_CONTACTS.secretary.phone;
+
+    const finalContacts = [
+      {
+        role: 'Vicar',
+        role_title: 'Vicar',
+        name: vicarName,
+        phone: vicarPhone,
+        phone_number: vicarPhone,
+      },
+      {
+        role: 'Assistant Vicar',
+        role_title: 'Assistant Vicar',
+        name: asstName,
+        phone: asstPhone,
+        phone_number: asstPhone,
+      },
+      {
+        role: 'Parish Secretary',
+        role_title: 'Parish Secretary',
+        name: secName,
+        phone: secPhone,
+        phone_number: secPhone,
+      },
+    ];
 
     res.status(200).json(finalContacts);
   } catch (error: any) {
     console.error('Error fetching quick contacts:', error);
-    res.status(500).json({ error: error.message || 'Failed to fetch quick contacts.' });
+    res.status(200).json([
+      {
+        role: 'Vicar',
+        role_title: 'Vicar',
+        name: DEFAULT_CONTACTS.vicar.name,
+        phone: DEFAULT_CONTACTS.vicar.phone,
+        phone_number: DEFAULT_CONTACTS.vicar.phone,
+      },
+      {
+        role: 'Assistant Vicar',
+        role_title: 'Assistant Vicar',
+        name: DEFAULT_CONTACTS.assistantVicar.name,
+        phone: DEFAULT_CONTACTS.assistantVicar.phone,
+        phone_number: DEFAULT_CONTACTS.assistantVicar.phone,
+      },
+      {
+        role: 'Parish Secretary',
+        role_title: 'Parish Secretary',
+        name: DEFAULT_CONTACTS.secretary.name,
+        phone: DEFAULT_CONTACTS.secretary.phone,
+        phone_number: DEFAULT_CONTACTS.secretary.phone,
+      },
+    ]);
   }
 };
 

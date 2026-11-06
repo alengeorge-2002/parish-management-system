@@ -349,3 +349,4 @@ export const getDirectorySummary = async (_req: Request, res: Response): Promise
 export const getDirectory = search;
 export const getFamilies = getDirectoryFamilies;
 export const getAllWards = getDirectoryWards;
+export { getQuickContacts } from './parish-council-controller';

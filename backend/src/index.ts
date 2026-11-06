@@ -103,6 +103,7 @@ export const autoInitializeDb = async () => {
       ALTER TABLE clergy_directory ADD COLUMN IF NOT EXISTS is_quick_contact BOOLEAN DEFAULT false;
       ALTER TABLE clergy_directory ADD COLUMN IF NOT EXISTS house_id INT;
       CREATE UNIQUE INDEX IF NOT EXISTS idx_clergy_directory_name ON clergy_directory(name);
+      CREATE OR REPLACE VIEW clergy AS SELECT * FROM clergy_directory;
     `);
 
     // 4. Safe seed query for clergy_directory with ON CONFLICT DO NOTHING

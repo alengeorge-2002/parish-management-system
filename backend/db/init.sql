@@ -167,6 +167,7 @@ ALTER TABLE clergy_directory ADD COLUMN IF NOT EXISTS display_order INTEGER DEFA
 ALTER TABLE clergy_directory ADD COLUMN IF NOT EXISTS is_quick_contact BOOLEAN DEFAULT false;
 ALTER TABLE clergy_directory ADD COLUMN IF NOT EXISTS house_id INT;
 CREATE UNIQUE INDEX IF NOT EXISTS idx_clergy_directory_name ON clergy_directory(name);
+CREATE OR REPLACE VIEW clergy AS SELECT * FROM clergy_directory;
 
 INSERT INTO clergy_directory (name, role_type, designation, address, email, phone_number, blood_group, avatar_url, display_order) VALUES
 ('Rev. Fr. Joseph Mathew', 'parish-priest', 'Vicar', NULL, 'pp.stjosephdevagiri@gmail.com', '+91 98450 00001', 'O+', NULL, 1),
