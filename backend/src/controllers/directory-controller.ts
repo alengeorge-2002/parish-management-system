@@ -238,6 +238,7 @@ export const getDirectoryFamilies = async (_req: Request, res: Response): Promis
       ward: row.ward?.ward_name || 'Parish Ward',
       photoUrl: row.family_photo_url || '',
       familyPhotoUrl: row.family_photo_url || '',
+      family_photo_url: row.family_photo_url || '',
       memberCount: Number(row.member_count) || 0,
       member_count: Number(row.member_count) || 0,
     }));
