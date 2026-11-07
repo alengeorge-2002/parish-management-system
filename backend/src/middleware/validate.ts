@@ -167,10 +167,18 @@ export const validateLogin = (
   res: Response,
   next: NextFunction
 ): void => {
-  const key = req.body.accessKey || req.body.access_key;
+  const key =
+    req.body.accessKey ||
+    req.body.access_key ||
+    req.body.key ||
+    req.body.identifier ||
+    req.body.username ||
+    req.body.phone ||
+    req.body.phoneNumber ||
+    req.body.phone_number;
 
   if (!key || typeof key !== 'string' || !key.trim()) {
-    res.status(400).json({ error: 'Access key is required' });
+    res.status(400).json({ error: 'Access key or phone number is required' });
     return;
   }
 

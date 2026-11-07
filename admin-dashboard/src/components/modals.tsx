@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { UploadCloud, Check, Image as ImageIcon, X, Home } from "lucide-react";
+import { UploadCloud, Check, Image as ImageIcon, X, Home, Key, Eye, EyeOff, Copy, Sparkles } from "lucide-react";
 import { Modal, Field, Input, Select, Button, Pill } from "./ui";
 import { useApp } from "../lib/app-context";
 import { BLOOD_GROUPS } from "../lib/data";
@@ -39,6 +39,7 @@ export interface MemberFormData {
   email: string;
   currentAddress: string;
   status: string;
+  password?: string;
   [key: string]: any;
 }
 
@@ -61,6 +62,11 @@ export function MemberModal({
   const [step, setStep] = useState(0);
   const [saving, setSaving] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
+
+  const [createAccount, setCreateAccount] = useState(false);
+  const [memberPassword, setMemberPassword] = useState("");
+  const [showMemberPassword, setShowMemberPassword] = useState(false);
+  const [copiedPassword, setCopiedPassword] = useState(false);
 
   const [formData, setFormData] = useState<MemberFormData>({
     fullName: "",
@@ -90,6 +96,11 @@ export function MemberModal({
   });
 
   useEffect(() => {
+    setCreateAccount(false);
+    setMemberPassword("");
+    setShowMemberPassword(false);
+    setCopiedPassword(false);
+
     if (initialData) {
       const uVal = initialData.unit || initialData.unit_number || initialData.unitNumber || "";
       const fId = typeof initialData.familyId === 'object'
@@ -231,21 +242,52 @@ export function MemberModal({
     tt("contactStep"),
   ];
 
+  const generateRandomPassword = () => {
+    const num = Math.floor(100 + Math.random() * 900);
+    const pwd = `Parish#${num}`;
+    setMemberPassword(pwd);
+    setErrors((prev) => ({ ...prev, password: "" }));
+    if (navigator?.clipboard?.writeText) {
+      navigator.clipboard.writeText(pwd);
+      setCopiedPassword(true);
+      setTimeout(() => setCopiedPassword(false), 2000);
+    }
+  };
+
+  const handleCopyPassword = () => {
+    if (memberPassword && navigator?.clipboard?.writeText) {
+      navigator.clipboard.writeText(memberPassword);
+      setCopiedPassword(true);
+      setTimeout(() => setCopiedPassword(false), 2000);
+    }
+  };
+
   const handleFinish = async () => {
     // Validate final step (contact) before saving
     const stepErrs: Record<string, string> = {};
     if (formData.phone && !validatePhone(formData.phone)) {
       stepErrs.phone = "Enter a valid phone number (7–15 digits, optional + prefix)";
     }
+    if (createAccount) {
+      if (!memberPassword.trim()) {
+        stepErrs.password = "Password is required when creating login account";
+      } else if (memberPassword.trim().length < 6) {
+        stepErrs.password = "Password must be at least 6 characters";
+      }
+    }
     if (Object.keys(stepErrs).length > 0) { setErrors(stepErrs); return; }
     setSaving(true);
     try {
       const finalUnit = formData.unit || selectedFamily?.unit || selectedFamily?.unit_number || "";
-      const payload = {
+      const payload: any = {
         ...formData,
         unit: finalUnit,
         unit_number: finalUnit,
       };
+
+      if (createAccount && memberPassword.trim()) {
+        payload.password = memberPassword.trim();
+      }
 
       await onSave(payload);
       onClose();
@@ -594,6 +636,105 @@ export function MemberModal({
               className="w-full rounded-[8px] border border-border bg-input px-3 py-2 text-[13px] text-foreground placeholder:text-muted-foreground/70 focus:border-primary/50 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
             />
           </Field>
+
+          {/* Optional Portal Login Account Section */}
+          <div className="sm:col-span-2 mt-1 rounded-lg border border-[#2d323e] bg-[#181b22]/70 p-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#F4C430]/15 text-[#F4C430]">
+                  <Key className="h-4 w-4" />
+                </div>
+                <div>
+                  <h4 className="text-sm font-semibold text-foreground">
+                    {initialData ? "Parishioner Portal Access / Password" : "Create Login Account"}
+                  </h4>
+                  <p className="text-xs text-muted-foreground">
+                    Enable login to Parishioner Mobile App &amp; Directory Portal
+                  </p>
+                </div>
+              </div>
+              <label className="relative inline-flex items-center cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={createAccount}
+                  onChange={(e) => {
+                    const checked = e.target.checked;
+                    setCreateAccount(checked);
+                    if (checked && !memberPassword) {
+                      generateRandomPassword();
+                    }
+                  }}
+                  className="sr-only peer"
+                />
+                <div className="w-11 h-6 bg-[#2d323e] peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[#F4C430]"></div>
+              </label>
+            </div>
+
+            {createAccount && (
+              <div className="mt-4 pt-3 border-t border-[#2d323e] space-y-3">
+                <div className="flex flex-col sm:flex-row gap-2">
+                  <div className="relative flex-1">
+                    <Input
+                      type={showMemberPassword ? "text" : "password"}
+                      placeholder="Enter password (min 6 chars)"
+                      value={memberPassword}
+                      onChange={(e) => {
+                        setMemberPassword(e.target.value);
+                        setErrors((p) => ({ ...p, password: "" }));
+                      }}
+                      className={`pr-10 font-mono text-sm bg-[#141414] border-[#2d323e] ${errors.password ? "border-rose-500/80" : ""}`}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowMemberPassword(!showMemberPassword)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+                      aria-label={showMemberPassword ? "Hide password" : "Show password"}
+                    >
+                      {showMemberPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                    </button>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={generateRandomPassword}
+                      className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg border border-[#F4C430]/40 text-[#F4C430] hover:bg-[#F4C430]/10 text-xs font-medium transition-colors"
+                      title="Generate random password"
+                    >
+                      <Sparkles className="h-3.5 w-3.5" />
+                      Generate Random
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={handleCopyPassword}
+                      disabled={!memberPassword}
+                      className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg border border-[#2d323e] bg-[#141414] hover:bg-[#20242e] text-slate-300 disabled:opacity-50 text-xs font-medium transition-colors"
+                      title="Copy to clipboard"
+                    >
+                      {copiedPassword ? (
+                        <>
+                          <Check className="h-3.5 w-3.5 text-emerald-400" />
+                          <span className="text-emerald-400">Copied!</span>
+                        </>
+                      ) : (
+                        <>
+                          <Copy className="h-3.5 w-3.5" />
+                          <span>Copy</span>
+                        </>
+                      )}
+                    </button>
+                  </div>
+                </div>
+
+                {errors.password && <p className="text-xs text-rose-500">{errors.password}</p>}
+
+                <p className="text-[11px] text-muted-foreground">
+                  Login identifier will be the member's mobile number ({formData.phone || "provided above"}).
+                </p>
+              </div>
+            )}
+          </div>
         </div>
       )}
     </Modal>

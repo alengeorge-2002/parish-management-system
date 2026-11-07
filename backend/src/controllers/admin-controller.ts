@@ -1,6 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
 import bcrypt from 'bcryptjs';
 import { pool } from '../config/db';
+import { generateAccessKey } from '../utils/crypto-utils';
 
 let appUsersSchemaEnsured = false;
 export const ensureAppUsersSchema = async () => {
@@ -909,6 +910,35 @@ export const createMember = async (req: Request, res: Response) => {
     );
 
     const row = result.rows[0];
+    const memberId = row.id;
+
+    // Handle optional user account password creation
+    const { password } = req.body;
+    if (password && typeof password === 'string' && password.trim() !== '') {
+      await ensureAppUsersSchema();
+      const passwordHash = await bcrypt.hash(password.trim(), 10);
+      const cleanPhone = (phone || phoneNumber || phone_number || '').trim();
+      let accessKeyCandidate = cleanPhone || generateAccessKey(10);
+
+      const keyCheck = await pool.query(
+        'SELECT member_id FROM app_users WHERE access_key = $1 AND member_id != $2',
+        [accessKeyCandidate, memberId]
+      );
+      if (keyCheck.rows.length > 0) {
+        accessKeyCandidate = `${accessKeyCandidate}_${memberId}`;
+      }
+
+      await pool.query(
+        `INSERT INTO app_users (member_id, access_key, password_hash, role)
+         VALUES ($1, $2, $3, $4)
+         ON CONFLICT (member_id)
+         DO UPDATE SET password_hash = EXCLUDED.password_hash,
+                       access_key = COALESCE(app_users.access_key, EXCLUDED.access_key),
+                       role = COALESCE(app_users.role, EXCLUDED.role)`,
+        [memberId, accessKeyCandidate, passwordHash, mRole || 'parishioner']
+      );
+    }
+
     res.status(201).json(mapMemberRow(row));
   } catch (error: any) {
     res.status(500).json({ error: error.message || 'Error creating member' });
@@ -970,6 +1000,34 @@ export const updateMember = async (req: Request, res: Response) => {
 
     if (result.rows.length === 0) return res.status(404).json({ error: 'Member not found' });
     const row = result.rows[0];
+
+    // Handle optional password update
+    const { password, role: userRole } = req.body;
+    if (password && typeof password === 'string' && password.trim() !== '') {
+      await ensureAppUsersSchema();
+      const passwordHash = await bcrypt.hash(password.trim(), 10);
+      const cleanPhone = (ph || row.phone_number || '').trim();
+      let accessKeyCandidate = cleanPhone || generateAccessKey(10);
+
+      const keyCheck = await pool.query(
+        'SELECT member_id FROM app_users WHERE access_key = $1 AND member_id != $2',
+        [accessKeyCandidate, id]
+      );
+      if (keyCheck.rows.length > 0) {
+        accessKeyCandidate = `${accessKeyCandidate}_${id}`;
+      }
+
+      await pool.query(
+        `INSERT INTO app_users (member_id, access_key, password_hash, role)
+         VALUES ($1, $2, $3, $4)
+         ON CONFLICT (member_id)
+         DO UPDATE SET password_hash = EXCLUDED.password_hash,
+                       access_key = COALESCE(app_users.access_key, EXCLUDED.access_key),
+                       role = COALESCE(app_users.role, EXCLUDED.role)`,
+        [id, accessKeyCandidate, passwordHash, userRole || row.role || 'parishioner']
+      );
+    }
+
     res.json(mapMemberRow(row));
   } catch (error: any) {
     res.status(500).json({ error: error.message || 'Error updating member' });

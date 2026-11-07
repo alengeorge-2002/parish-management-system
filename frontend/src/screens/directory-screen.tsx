@@ -575,8 +575,8 @@ export default function DirectoryScreen() {
           <RefreshControl
             refreshing={refreshing}
             onRefresh={onRefresh}
-            tintColor={colors.gold || '#F4C430'}
-            colors={[colors.gold || '#F4C430']}
+            tintColor={colors.primary || '#F4C430'}
+            colors={[colors.primary || '#F4C430']}
           />
         }
       >

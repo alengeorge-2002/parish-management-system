@@ -156,6 +156,7 @@ export interface MemberData {
   isHeadOfHousehold?: boolean;
   sacraments?: string[];
   status?: string;
+  password?: string;
 }
 
 export const membersApi = {
