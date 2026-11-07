@@ -13,21 +13,46 @@ export const ensureAppUsersSchema = async () => {
   }
 };
 
-/*** Helper to extract uploaded file ***/
+/*** Helper to extract uploaded file (Cloudinary HTTPS URL or disk storage fallback) ***/
 const extractUploadedPhoto = (req: Request): string | null => {
-  if (req.file) {
-    return `/uploads/family-photos/${req.file.filename}`;
+  const file = req.file as any;
+  if (file) {
+    if (file.path && (file.path.startsWith('http://') || file.path.startsWith('https://'))) {
+      return file.path;
+    }
+    if (file.secure_url) {
+      return file.secure_url;
+    }
+    if (file.filename) {
+      return `/uploads/family-photos/${file.filename}`;
+    }
+    if (file.path) {
+      return file.path;
+    }
   }
+
   const filesAny = req.files as any;
   if (filesAny) {
-    if (filesAny.familyPhoto && filesAny.familyPhoto[0]) {
-      return `/uploads/family-photos/${filesAny.familyPhoto[0].filename}`;
-    }
-    if (filesAny.family_photo && filesAny.family_photo[0]) {
-      return `/uploads/family-photos/${filesAny.family_photo[0].filename}`;
+    const f = (filesAny.familyPhoto && filesAny.familyPhoto[0]) ||
+              (filesAny.family_photo && filesAny.family_photo[0]) ||
+              (filesAny.photo && filesAny.photo[0]);
+    if (f) {
+      if (f.path && (f.path.startsWith('http://') || f.path.startsWith('https://'))) {
+        return f.path;
+      }
+      if (f.secure_url) {
+        return f.secure_url;
+      }
+      if (f.filename) {
+        return `/uploads/family-photos/${f.filename}`;
+      }
+      if (f.path) {
+        return f.path;
+      }
     }
   }
-  return null;
+
+  return req.file?.path || (req.file as any)?.secure_url || req.body.familyPhotoUrl || req.body.family_photo_url || req.body.family_photo || null;
 };
 
 const parseDate = (val: any) => {
@@ -684,7 +709,7 @@ export const createFamily = async (req: Request, res: Response) => {
   try {
     const { houseName, house_name, familyName, family_name, familyCode, family_code, headOfFamily, head_of_family, wardId, ward, unit, unitNumber, unit_number, address, homeAddress, home_address, contactNumber, contact_number, regNo, reg_no, email, unitId, unit_id } = req.body;
 
-    let familyPhotoUrl = extractUploadedPhoto(req);
+    let familyPhotoUrl = req.file?.path || (req.file as any)?.secure_url || extractUploadedPhoto(req);
     if (!familyPhotoUrl) {
       familyPhotoUrl = req.body.familyPhotoUrl || req.body.family_photo_url || req.body.family_photo || null;
     }
@@ -723,7 +748,7 @@ export const updateFamily = async (req: Request, res: Response) => {
 
     const { houseName, house_name, familyName, family_name, familyCode, family_code, headOfFamily, head_of_family, wardId, ward, unit, unitNumber, unit_number, address, homeAddress, home_address, contactNumber, contact_number, regNo, reg_no, email, unitId, unit_id } = req.body;
 
-    let familyPhotoUrl = extractUploadedPhoto(req);
+    let familyPhotoUrl = req.file?.path || (req.file as any)?.secure_url || extractUploadedPhoto(req);
     if (!familyPhotoUrl) {
       familyPhotoUrl = req.body.familyPhotoUrl || req.body.family_photo_url || req.body.family_photo || null;
     }

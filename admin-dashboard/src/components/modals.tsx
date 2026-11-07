@@ -60,7 +60,6 @@ export function MemberModal({
   const { tt } = useApp();
   const [step, setStep] = useState(0);
   const [saving, setSaving] = useState(false);
-  const [photoFile, setPhotoFile] = useState<File | null>(null);
   const [errors, setErrors] = useState<Record<string, string>>({});
 
   const [formData, setFormData] = useState<MemberFormData>({
@@ -91,7 +90,6 @@ export function MemberModal({
   });
 
   useEffect(() => {
-    setPhotoFile(null);
     if (initialData) {
       const uVal = initialData.unit || initialData.unit_number || initialData.unitNumber || "";
       const fId = typeof initialData.familyId === 'object'
@@ -249,14 +247,7 @@ export function MemberModal({
         unit_number: finalUnit,
       };
 
-      if (photoFile) {
-        const fd = new FormData();
-        Object.entries(payload).forEach(([k, v]) => fd.append(k, String(v)));
-        fd.append("photo", photoFile);
-        await onSave(fd);
-      } else {
-        await onSave(payload);
-      }
+      await onSave(payload);
       onClose();
       setStep(0);
     } catch (e) {
@@ -458,14 +449,6 @@ export function MemberModal({
               <option value="deceased">Deceased</option>
             </Select>
           </Field>
-          <div className="sm:col-span-2">
-            <PhotoDropzone
-              label="Photo Upload"
-              aspect="square"
-              onFileSelect={setPhotoFile}
-              initialUrl={initialData?.avatar || initialData?.photo || getMemberAvatar(initialData || { gender: formData.gender })}
-            />
-          </div>
         </div>
       )}
 
@@ -1612,14 +1595,9 @@ export function FamilyDetailsModal({
                       <tr key={typeof m?.id === 'object' ? (m.id?._id || idx) : (m?.id || m?._id || idx)} className="transition-colors hover:bg-secondary/30">
                         <td className="px-4 py-2.5 min-w-[200px]">
                           <div className="flex items-center gap-2.5">
-                            <img
-                              src={avatarSrc}
-                              alt={String(name)}
-                              className="h-8 w-8 rounded-full object-cover shrink-0"
-                              onError={(e) => {
-                                e.currentTarget.src = getMemberAvatar({ gender });
-                              }}
-                            />
+                            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-secondary border border-border text-foreground font-semibold text-xs uppercase">
+                              {String(name).trim().charAt(0) || "M"}
+                            </div>
                             <div className="min-w-0">
                               <div className="font-semibold text-foreground whitespace-normal">{name}</div>
                               {malayalamNameStr ? (

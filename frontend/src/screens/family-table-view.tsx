@@ -9,7 +9,8 @@ import {
   Modal, 
   Linking, 
   Alert, 
-  ActivityIndicator 
+  ActivityIndicator,
+  Image
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import * as SecureStore from 'expo-secure-store';
@@ -29,6 +30,11 @@ export default function FamilyTableView() {
   
   const { family, highlightMemberId } = route.params as { family: any, highlightMemberId?: number };
   
+  const rawPhoto = family?.familyPhotoUrl || family?.family_photo_url || family?.photoUrl || family?.familyPhoto;
+  const groupPhotoUrl = rawPhoto
+    ? (String(rawPhoto).startsWith('http') ? String(rawPhoto) : `${API_BASE_URL}${String(rawPhoto).startsWith('/') ? '' : '/'}${String(rawPhoto)}`)
+    : null;
+
   const [members, setMembers] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedMember, setSelectedMember] = useState<any | null>(null);
@@ -156,12 +162,22 @@ export default function FamilyTableView() {
         </View>
       ) : (
         <ScrollView style={styles.scrollBody} contentContainerStyle={styles.scrollBodyContent}>
-          {/* Family Card summary at the top */}
+          {/* Family Group Photo Banner and Summary at the top */}
           <View style={styles.summaryCard}>
+            {groupPhotoUrl ? (
+              <View style={styles.bannerContainer}>
+                <Image 
+                  source={{ uri: groupPhotoUrl }}
+                  style={styles.bannerImage}
+                  resizeMode="cover"
+                  accessibilityLabel="Family Group Photo"
+                />
+              </View>
+            ) : null}
             <Text style={styles.summaryHouse}>{family.houseName}</Text>
             <Text style={styles.summaryAddress}>{family.homeAddress}</Text>
             <Text style={styles.summaryUnit}>
-              {`${t('unit-number')}: ${family.unitNumber}`}
+              {`${t('unit-number')}: ${family.unitNumber} • ${family.ward}`}
             </Text>
           </View>
 
@@ -412,6 +428,20 @@ const getStyles = (colors: any, isDark: boolean) => StyleSheet.create({
     ...Platform.select({
       web: { boxShadow: '0 4px 10px rgba(61,43,31,0.04)' }
     })
+  },
+  bannerContainer: {
+    width: '100%',
+    height: 190,
+    borderRadius: 12,
+    overflow: 'hidden',
+    marginBottom: 14,
+    backgroundColor: isDark ? '#181b22' : '#f0f0f0',
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  bannerImage: {
+    width: '100%',
+    height: '100%',
   },
   summaryHouse: {
     fontSize: 18,

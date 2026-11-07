@@ -9,6 +9,16 @@ import { API_BASE_URL, apiFetch } from '../config';
 import { useNavigation } from '@react-navigation/native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 
+export const getPhotoSrc = (url?: string | null): string | null => {
+  if (!url) return null;
+  const str = String(url).trim();
+  if (!str) return null;
+  if (str.startsWith('http://') || str.startsWith('https://') || str.startsWith('blob:') || str.startsWith('data:')) {
+    return str;
+  }
+  return `${API_BASE_URL}${str.startsWith('/') ? '' : '/'}${str}`;
+};
+
 const DEFAULT_FALLBACK_CONTACTS = [
   { role: 'Vicar', role_title: 'Vicar', name: 'Rev. Fr. Joseph Mathew', phone: '+91 94471 00001', phone_number: '+91 94471 00001' },
   { role: 'Assistant Vicar', role_title: 'Assistant Vicar', name: 'Rev. Fr. George Varghese', phone: '+91 94471 00002', phone_number: '+91 94471 00002' },
@@ -193,14 +203,9 @@ export default function DirectoryScreen() {
               unitNumber: unitNumVal,
               ward: wardName || 'Parish Ward',
               wardId: fam.ward_id || fam.ward,
-              photoUrl: (fam.family_photo_url || fam.familyPhotoUrl || fam.photoUrl || '') &&
-                String(fam.family_photo_url || fam.familyPhotoUrl || fam.photoUrl).startsWith('/uploads')
-                ? `${API_BASE_URL}${fam.family_photo_url || fam.familyPhotoUrl || fam.photoUrl}`
-                : (fam.family_photo_url || fam.familyPhotoUrl || fam.photoUrl || ''),
-              familyPhotoUrl: (fam.family_photo_url || fam.familyPhotoUrl || fam.photoUrl || '') &&
-                String(fam.family_photo_url || fam.familyPhotoUrl || fam.photoUrl).startsWith('/uploads')
-                ? `${API_BASE_URL}${fam.family_photo_url || fam.familyPhotoUrl || fam.photoUrl}`
-                : (fam.family_photo_url || fam.familyPhotoUrl || fam.photoUrl || ''),
+              photoUrl: getPhotoSrc(fam.family_photo_url || fam.familyPhotoUrl || fam.photoUrl) || '',
+              familyPhotoUrl: getPhotoSrc(fam.family_photo_url || fam.familyPhotoUrl || fam.photoUrl) || '',
+              family_photo_url: getPhotoSrc(fam.family_photo_url || fam.familyPhotoUrl || fam.photoUrl) || '',
               contactNumber: fam.contact_number || fam.contactNumber || '',
               email: fam.email || ''
             };
@@ -593,12 +598,10 @@ export default function DirectoryScreen() {
         {selectedProfile !== null ? (
           <View style={[globalStyles.card, styles.detailsCard]}>
             <View style={styles.detailsHeader}>
-              {selectedProfile.familyPhotoUrl && selectedProfile.familyPhotoUrl.trim() !== '' ? (
+              {getPhotoSrc(selectedProfile.familyPhotoUrl || selectedProfile.family_photo_url || selectedProfile.photoUrl) ? (
                 <Image 
                   source={{ 
-                    uri: selectedProfile.familyPhotoUrl.startsWith('/uploads')
-                      ? `${API_BASE_URL}${selectedProfile.familyPhotoUrl}`
-                      : selectedProfile.familyPhotoUrl 
+                    uri: getPhotoSrc(selectedProfile.familyPhotoUrl || selectedProfile.family_photo_url || selectedProfile.photoUrl)!
                   }} 
                   style={styles.familyPhoto} 
                   accessibilityLabel="Family Photo"
@@ -1064,6 +1067,20 @@ export default function DirectoryScreen() {
                   onPress={() => (navigation as any).navigate('FamilyTableView', { family: item, highlightMemberId: item.matchedMemberId })}
                   accessibilityLabel={`View ${item.houseName}`}
                 >
+                  {getPhotoSrc(item.familyPhotoUrl || item.family_photo_url || item.photoUrl) ? (
+                    <Image 
+                      source={{ 
+                        uri: getPhotoSrc(item.familyPhotoUrl || item.family_photo_url || item.photoUrl)!
+                      }} 
+                      style={styles.householdAvatar}
+                      resizeMode="cover"
+                      accessibilityLabel="Family Photo"
+                    />
+                  ) : (
+                    <View style={styles.householdAvatarPlaceholder}>
+                      <Ionicons name="people-outline" size={22} color={colors.darkGold} />
+                    </View>
+                  )}
                   <View style={styles.profileText}>
                     <Text style={[styles.profileName, { fontSize: 17, marginBottom: 4 }]}>{item.houseName}</Text>
                     <Text style={[styles.profileRole, { fontSize: 13, color: colors.textMuted, marginBottom: 2 }]}>{item.homeAddress}</Text>
@@ -1108,6 +1125,20 @@ export default function DirectoryScreen() {
                     onPress={() => (navigation as any).navigate('FamilyTableView', { family: item, highlightMemberId: item.matchedMemberId })}
                     accessibilityLabel={`View ${item.houseName}`}
                   >
+                    {getPhotoSrc(item.familyPhotoUrl || item.family_photo_url || item.photoUrl) ? (
+                      <Image 
+                        source={{ 
+                          uri: getPhotoSrc(item.familyPhotoUrl || item.family_photo_url || item.photoUrl)!
+                        }} 
+                        style={styles.householdAvatar}
+                        resizeMode="cover"
+                        accessibilityLabel="Family Photo"
+                      />
+                    ) : (
+                      <View style={styles.householdAvatarPlaceholder}>
+                        <Ionicons name="people-outline" size={22} color={colors.darkGold} />
+                      </View>
+                    )}
                     <View style={styles.profileText}>
                       <Text style={[styles.profileName, { fontSize: 17, marginBottom: 4 }]}>{item.houseName}</Text>
                       <Text style={[styles.profileRole, { fontSize: 13, color: colors.textMuted, marginBottom: 2 }]}>{item.homeAddress}</Text>
@@ -1634,6 +1665,26 @@ const getStyles = (colors: any, isDark: boolean) => StyleSheet.create({
     })
   },
 
+  householdAvatar: {
+    width: 48,
+    height: 48,
+    borderRadius: 12,
+    marginRight: 14,
+    borderWidth: 1.5,
+    borderColor: colors.border,
+    backgroundColor: isDark ? '#181b22' : '#f0f0f0',
+  },
+  householdAvatarPlaceholder: {
+    width: 48,
+    height: 48,
+    borderRadius: 12,
+    marginRight: 14,
+    borderWidth: 1.5,
+    borderColor: colors.border,
+    backgroundColor: isDark ? '#1f242d' : '#f5f0e6',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   avatarCircle: {
     width: 44,
     height: 44,

@@ -2,6 +2,15 @@ import { Request } from 'express';
 import multer, { FileFilterCallback } from 'multer';
 import path from 'path';
 import fs from 'fs';
+import { v2 as cloudinary } from 'cloudinary';
+import { CloudinaryStorage } from 'multer-storage-cloudinary';
+
+// Configure Cloudinary from environment variables
+cloudinary.config({
+  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+  api_key: process.env.CLOUDINARY_API_KEY,
+  api_secret: process.env.CLOUDINARY_API_SECRET,
+});
 
 const getUploadSubdir = (subdir: string) => {
   const candidateBases = [
@@ -16,29 +25,46 @@ const getUploadSubdir = (subdir: string) => {
   return target;
 };
 
-const storage = multer.diskStorage({
-  destination: (req: Request, file: Express.Multer.File, cb: (error: Error | null, destination: string) => void) => {
+// Fallback disk storage for local development when Cloudinary is not configured
+const diskFamilyStorage = multer.diskStorage({
+  destination: (_req: Request, _file: Express.Multer.File, cb: (error: Error | null, destination: string) => void) => {
     const uploadDir = getUploadSubdir('family-photos');
     cb(null, uploadDir);
   },
-  filename: (req: Request, file: Express.Multer.File, cb: (error: Error | null, filename: string) => void) => {
+  filename: (_req: Request, file: Express.Multer.File, cb: (error: Error | null, filename: string) => void) => {
     const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
     const ext = path.extname(file.originalname);
     cb(null, 'family-' + uniqueSuffix + ext);
   }
 });
 
-const fileFilter = (req: Request, file: Express.Multer.File, cb: FileFilterCallback) => {
-  const allowedTypes = ['image/png', 'image/jpeg', 'image/jpg'];
+const isCloudinaryConfigured = Boolean(
+  process.env.CLOUDINARY_CLOUD_NAME &&
+  process.env.CLOUDINARY_API_KEY &&
+  process.env.CLOUDINARY_API_SECRET
+);
+
+// Cloudinary storage engine for family group photos
+const cloudinaryFamilyStorage = new CloudinaryStorage({
+  cloudinary: cloudinary,
+  params: {
+    folder: 'parish/family-photos',
+    allowed_formats: ['jpg', 'jpeg', 'png', 'webp'],
+    transformation: [{ width: 1200, height: 800, crop: 'limit', quality: 'auto' }],
+  } as any,
+});
+
+const fileFilter = (_req: Request, file: Express.Multer.File, cb: FileFilterCallback) => {
+  const allowedTypes = ['image/png', 'image/jpeg', 'image/jpg', 'image/webp'];
   if (allowedTypes.includes(file.mimetype)) {
     cb(null, true);
   } else {
-    cb(new Error('Invalid file type. Only PNG, JPG, and JPEG are allowed.'));
+    cb(new Error('Invalid file type. Only PNG, JPG, JPEG, and WEBP are allowed.'));
   }
 };
 
 export const uploadFamilyPhoto = multer({
-  storage: storage,
+  storage: isCloudinaryConfigured ? cloudinaryFamilyStorage : diskFamilyStorage,
   fileFilter: fileFilter,
   limits: {
     fileSize: 5 * 1024 * 1024 // 5MB limit
@@ -46,11 +72,11 @@ export const uploadFamilyPhoto = multer({
 });
 
 const clergyStorage = multer.diskStorage({
-  destination: (req: Request, file: Express.Multer.File, cb: (error: Error | null, destination: string) => void) => {
+  destination: (_req: Request, _file: Express.Multer.File, cb: (error: Error | null, destination: string) => void) => {
     const uploadDir = getUploadSubdir('clergy-avatars');
     cb(null, uploadDir);
   },
-  filename: (req: Request, file: Express.Multer.File, cb: (error: Error | null, filename: string) => void) => {
+  filename: (_req: Request, file: Express.Multer.File, cb: (error: Error | null, filename: string) => void) => {
     const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
     const ext = path.extname(file.originalname);
     cb(null, 'clergy-' + uniqueSuffix + ext);
@@ -64,4 +90,3 @@ export const uploadClergyAvatar = multer({
     fileSize: 5 * 1024 * 1024 // 5MB limit
   }
 });
-

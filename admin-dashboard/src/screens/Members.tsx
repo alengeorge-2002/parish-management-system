@@ -458,14 +458,9 @@ export default function Members() {
                   <tr key={m.id} className="transition-colors hover:bg-secondary/40">
                     <td className="px-5 py-3">
                       <div className="flex items-center gap-3">
-                        <img
-                          src={getMemberAvatar(m.raw || m)}
-                          alt={m.name}
-                          className="h-9 w-9 rounded-full object-cover"
-                          onError={(e) => {
-                            e.currentTarget.src = getMemberAvatar({ gender: m.gender || m.raw?.gender });
-                          }}
-                        />
+                        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-secondary border border-border text-foreground font-semibold text-xs uppercase">
+                          {m.name ? m.name.trim().charAt(0) : "P"}
+                        </div>
                         <div className="min-w-0">
                           <div className="truncate font-semibold text-foreground">
                             {m.name}

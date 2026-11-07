@@ -20,8 +20,12 @@ import { familiesApi, wardsApi, membersApi, API_BASE_URL } from "../utils/api-cl
 
 export const getPhotoSrc = (url?: string) => {
   if (!url) return null;
-  if (url.startsWith('http') || url.startsWith('blob:') || url.startsWith('data:')) return url;
-  return `${API_BASE_URL}${url.startsWith('/') ? '' : '/'}${url}`;
+  const trimmed = url.trim();
+  if (!trimmed) return null;
+  if (trimmed.startsWith('http://') || trimmed.startsWith('https://') || trimmed.startsWith('blob:') || trimmed.startsWith('data:')) {
+    return trimmed;
+  }
+  return `${API_BASE_URL}${trimmed.startsWith('/') ? '' : '/'}${trimmed}`;
 };
 
 function AvatarStack({ family, onClick }: { family: any; onClick?: () => void }) {
@@ -325,9 +329,9 @@ export default function Families() {
                     {typeof f.house === 'object' ? (f.house?.house_name || f.house?.familyName || 'Household') : String(f.house || 'Household')}
                   </span>
                 </div>
-                {getPhotoSrc(f.familyPhotoUrl || f.banner) ? (
+                {getPhotoSrc(f.familyPhotoUrl || f.family_photo_url || f.banner) ? (
                   <img
-                    src={getPhotoSrc(f.familyPhotoUrl || f.banner) || '/default-family-avatar.png'}
+                    src={getPhotoSrc(f.familyPhotoUrl || f.family_photo_url || f.banner)!}
                     onError={(e) => {
                       (e.target as HTMLElement).style.display = 'none';
                     }}
