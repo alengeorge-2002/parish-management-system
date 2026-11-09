@@ -246,12 +246,36 @@ export function MemberModal({
   ];
 
   const generateRandomPassword = () => {
-    const num = Math.floor(100 + Math.random() * 900);
-    const pwd = `Parish#${num}`;
-    setMemberPassword(pwd);
+    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789!@#$%&*';
+    const length = 10;
+
+    const generateCandidate = (): string => {
+      let pwd = '';
+      if (typeof window !== 'undefined' && window.crypto && window.crypto.getRandomValues) {
+        const randomValues = new Uint32Array(length);
+        window.crypto.getRandomValues(randomValues);
+        for (let i = 0; i < length; i++) {
+          pwd += chars[randomValues[i] % chars.length];
+        }
+      } else {
+        for (let i = 0; i < length; i++) {
+          pwd += chars.charAt(Math.floor(Math.random() * chars.length));
+        }
+      }
+      return pwd;
+    };
+
+    let password = '';
+    let attempts = 0;
+    do {
+      password = generateCandidate();
+      attempts++;
+    } while (attempts < 50 && (!/[A-Z]/.test(password) || !/[a-z]/.test(password) || !/[0-9]/.test(password)));
+
+    setMemberPassword(password);
     setErrors((prev) => ({ ...prev, password: "" }));
     if (navigator?.clipboard?.writeText) {
-      navigator.clipboard.writeText(pwd);
+      navigator.clipboard.writeText(password);
       setCopiedPassword(true);
       setTimeout(() => setCopiedPassword(false), 2000);
     }
