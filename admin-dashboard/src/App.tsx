@@ -168,7 +168,7 @@ export default function App() {
             <div className="mb-3 flex h-14 w-14 items-center justify-center rounded-[14px] bg-gradient-to-br from-primary to-primary-hover shadow-[0_4px_20px_-4px_var(--primary)]">
               <Cross className="h-7 w-7 text-primary-foreground" strokeWidth={2.5} />
             </div>
-            <h2 className="font-display text-[22px] font-bold text-foreground">St. Mary's Parish</h2>
+            <h2 className="font-display text-[22px] font-bold text-foreground">ST JOSEPH CHURCH DEVAGIRI PARISH</h2>
             <p className="mt-1 font-mono text-[11px] font-bold tracking-wider text-primary uppercase">
               ADMINISTRATIVE SANCTUM PORTAL
             </p>
