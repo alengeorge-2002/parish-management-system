@@ -3,6 +3,7 @@ import { View, Text, TextInput, TouchableOpacity, StyleSheet, Platform, Activity
 import { SafeAreaView } from 'react-native-safe-area-context';
 import * as SecureStore from 'expo-secure-store';
 import axios from 'axios';
+import { Ionicons } from '@expo/vector-icons';
 import { colors, typography } from '../styles/accessible-theme';
 import { useTheme } from '../styles/theme-context';
 import { useLanguage } from '../localization/language-context';
@@ -11,13 +12,17 @@ import { API_BASE_URL } from '../config';
 export default function LoginScreen({ onLoginSuccess }: any) {
   const { colors, isDark } = useTheme();
   const { language: lang, setLanguage: setLang, t } = useLanguage();
-  const [otpAccessKey, setOtpAccessKey] = useState('');
+  const [identifier, setIdentifier] = useState('');
+  const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
 
   const handleLogin = async () => {
-    if (!otpAccessKey.trim()) {
-      const err = lang === 'ml' ? 'ആക്സസ് കീ നൽകേണ്ടതുണ്ട്' : 'Access key is required';
+    if (!identifier.trim()) {
+      const err = lang === 'ml' 
+        ? 'ഫോൺ നമ്പറോ ആക്സസ് കീയോ നൽകേണ്ടതുണ്ട്' 
+        : 'Phone number or access key is required';
       setErrorMsg(err);
       return;
     }
@@ -26,10 +31,13 @@ export default function LoginScreen({ onLoginSuccess }: any) {
     setErrorMsg('');
 
     try {
-      // Dispatches asynchronous axios post request to local login endpoint
+      // Dispatches asynchronous axios post request to login endpoint
       const response = await axios.post(`${API_BASE_URL}/api/auth/login`, { 
-        access_key: otpAccessKey.trim(),
-        accessKey: otpAccessKey.trim()
+        access_key: identifier.trim(),
+        accessKey: identifier.trim(),
+        identifier: identifier.trim(),
+        phone: identifier.trim(),
+        password: password,
       }, {
         headers: {
           'Content-Type': 'application/json'
@@ -42,40 +50,51 @@ export default function LoginScreen({ onLoginSuccess }: any) {
         // Write the returned JWT token directly to web local storage
         try {
           localStorage.setItem('user_token', data.token);
-          localStorage.setItem('user_first_name', data.user.firstName || '');
-          localStorage.setItem('user_last_name', data.user.lastName || '');
-          localStorage.setItem('user_role', data.user.role || 'parishioner');
+          localStorage.setItem('user_first_name', data.user?.firstName || '');
+          localStorage.setItem('user_last_name', data.user?.lastName || '');
+          localStorage.setItem('user_role', data.user?.role || 'parishioner');
+          if (data.user?.memberId) localStorage.setItem('user_member_id', String(data.user.memberId));
+          if (data.user?.phoneNumber) localStorage.setItem('user_phone', String(data.user.phoneNumber));
+          if (data.user?.email) localStorage.setItem('user_email', String(data.user.email));
+          localStorage.setItem('user_details', JSON.stringify(data.user || {}));
         } catch (_) {}
 
         // SecureStore fallback for native devices
         try {
           await SecureStore.setItemAsync('user_token', data.token);
-          await SecureStore.setItemAsync('user_first_name', data.user.firstName || '');
-          await SecureStore.setItemAsync('user_last_name', data.user.lastName || '');
-          await SecureStore.setItemAsync('user_role', data.user.role || 'parishioner');
+          await SecureStore.setItemAsync('user_first_name', data.user?.firstName || '');
+          await SecureStore.setItemAsync('user_last_name', data.user?.lastName || '');
+          await SecureStore.setItemAsync('user_role', data.user?.role || 'parishioner');
+          if (data.user?.memberId) await SecureStore.setItemAsync('user_member_id', String(data.user.memberId));
+          if (data.user?.phoneNumber) await SecureStore.setItemAsync('user_phone', String(data.user.phoneNumber));
+          if (data.user?.email) await SecureStore.setItemAsync('user_email', String(data.user.email));
+          await SecureStore.setItemAsync('user_details', JSON.stringify(data.user || {}));
         } catch (_) {}
 
         /* 
-         * DEVELOPER COMMENT:
-         * The handleLogin subroutine is configured and ready for future One-Time Password (OTP) 
-         * validation/integration logic.
+         * Seamlessly transition and navigate to Parish Directory
          */
-        onLoginSuccess(data.token);
+        if (onLoginSuccess) {
+          onLoginSuccess(data.token, 'Directory');
+        }
       } else {
-        const rawError = data.error || 'Authentication failed';
-        const displayError = lang === 'ml' && (rawError.toLowerCase().includes('invalid') || rawError.toLowerCase().includes('fail'))
-          ? 'ആക്സസ് കീ തെറ്റാണ്'
-          : rawError;
-        setErrorMsg(displayError);
+        const errorMsgText = lang === 'ml'
+          ? 'ഫോൺ നമ്പറോ പാസ്‌വേഡോ തെറ്റാണ്. ദയവായി നിങ്ങളുടെ വിവരങ്ങൾ പരിശോധിക്കുക അല്ലെങ്കിൽ ഇടവക ഓഫീസുമായി ബന്ധപ്പെടുക.'
+          : 'Invalid phone number or password. Please check your credentials or contact the parish office.';
+        setErrorMsg(errorMsgText);
       }
     } catch (e: any) {
       console.error(e);
       let errorMsgText = '';
-      if (e.response && e.response.data) {
-        const rawError = e.response.data.error || e.response.data.message || 'Authentication failed';
-        errorMsgText = lang === 'ml' && (rawError.toLowerCase().includes('invalid') || rawError.toLowerCase().includes('fail'))
-          ? 'ആക്സസ് കീ തെറ്റാണ്'
-          : rawError;
+      if (e.response && (e.response.status === 401 || e.response.status === 400)) {
+        errorMsgText = lang === 'ml'
+          ? 'ഫോൺ നമ്പറോ പാസ്‌വേഡോ തെറ്റാണ്. ദയവായി നിങ്ങളുടെ വിവരങ്ങൾ പരിശോധിക്കുക അല്ലെങ്കിൽ ഇടവക ഓഫീസുമായി ബന്ധപ്പെടുക.'
+          : 'Invalid phone number or password. Please check your credentials or contact the parish office.';
+      } else if (e.response && e.response.data) {
+        const rawError = e.response.data.error || e.response.data.message;
+        errorMsgText = rawError || (lang === 'ml'
+          ? 'ഫോൺ നമ്പറോ പാസ്‌വേഡോ തെറ്റാണ്. ദയവായി നിങ്ങളുടെ വിവരങ്ങൾ പരിശോധിക്കുക അല്ലെങ്കിൽ ഇടവക ഓഫീസുമായി ബന്ധപ്പെടുക.'
+          : 'Invalid phone number or password. Please check your credentials or contact the parish office.');
       } else {
         errorMsgText = lang === 'ml' 
           ? 'നെറ്റ്‌വർക്ക് തകരാർ. ദയവായി പിന്നീട് ശ്രമിക്കുക.' 
@@ -122,22 +141,56 @@ export default function LoginScreen({ onLoginSuccess }: any) {
 
       {/* Login Card */}
       <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
+        {/* Field 1: Phone number / access key */}
         <Text style={[styles.label, { color: colors.foreground }]}>
-          {lang === 'ml' ? 'ആക്സസ് കീ' : 'ACCESS KEY'}
+          {lang === 'ml' ? 'ഫോൺ നമ്പർ / ആക്സസ് കീ' : 'PHONE NUMBER / ACCESS KEY'}
         </Text>
         
-        {/* Oversized text input field with exactly 16px border radius */}
         <TextInput
           style={[styles.input, { backgroundColor: colors.inputTextBg, borderColor: colors.inputBorder, color: colors.foreground }]}
-          placeholder="Enter your permanent access key"
+          placeholder={lang === 'ml' ? 'രജിസ്റ്റർ ചെയ്ത മൊബൈൽ നമ്പർ നൽകുക (ഉദാ: 8547621458)' : 'Enter registered mobile number (e.g. 8547621458)'}
           placeholderTextColor={colors.textMuted}
-          value={otpAccessKey}
-          onChangeText={setOtpAccessKey}
+          value={identifier}
+          onChangeText={setIdentifier}
           autoCapitalize="none"
           autoCorrect={false}
-          secureTextEntry
-          accessibilityLabel="Enter your permanent access key"
+          keyboardType={Platform.OS === 'web' ? 'default' : 'phone-pad'}
+          accessibilityLabel="Enter registered mobile number or access key"
         />
+
+        {/* Field 2: Password */}
+        <Text style={[styles.label, { color: colors.foreground }]}>
+          {lang === 'ml' ? 'പാസ്‌വേഡ്' : 'PASSWORD'}
+        </Text>
+        <View style={styles.passwordContainer}>
+          <TextInput
+            style={[
+              styles.input,
+              styles.passwordInput,
+              { backgroundColor: colors.inputTextBg, borderColor: colors.inputBorder, color: colors.foreground }
+            ]}
+            placeholder={lang === 'ml' ? 'നിങ്ങളുടെ പാസ്‌വേഡ് നൽകുക' : 'Enter your password'}
+            placeholderTextColor={colors.textMuted}
+            value={password}
+            onChangeText={setPassword}
+            autoCapitalize="none"
+            autoCorrect={false}
+            secureTextEntry={!showPassword}
+            accessibilityLabel="Enter your password"
+          />
+          <TouchableOpacity
+            style={styles.eyeButton}
+            onPress={() => setShowPassword((prev) => !prev)}
+            accessibilityLabel={showPassword ? 'Hide password' : 'Show password'}
+            accessibilityRole="button"
+          >
+            <Ionicons
+              name={showPassword ? 'eye-off-outline' : 'eye-outline'}
+              size={22}
+              color={colors.textMuted}
+            />
+          </TouchableOpacity>
+        </View>
 
         {errorMsg !== '' ? (
           <Text style={[styles.errorText, { color: colors.error }]}>{errorMsg}</Text>
@@ -259,6 +312,25 @@ const styles = StyleSheet.create({
     fontSize: 18,
     height: 64, // oversized height
     marginBottom: 16,
+  },
+  passwordContainer: {
+    position: 'relative',
+    justifyContent: 'center',
+    marginBottom: 16,
+  },
+  passwordInput: {
+    marginBottom: 0,
+    paddingRight: 52,
+  },
+  eyeButton: {
+    position: 'absolute',
+    right: 14,
+    top: 0,
+    bottom: 0,
+    justifyContent: 'center',
+    alignItems: 'center',
+    width: 40,
+    height: 64,
   },
   errorText: {
     color: '#b23b3b',

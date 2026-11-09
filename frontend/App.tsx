@@ -287,6 +287,7 @@ function MainAppWrapper() {
   // Live status bar time
   const [currentTime, setCurrentTime] = useState('09:41');
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
+  const [postLoginNavigate, setPostLoginNavigate] = useState<string | null>(null);
 
   useEffect(() => {
     if (Platform.OS === 'web') {
@@ -402,9 +403,25 @@ function MainAppWrapper() {
   const appContent = (
     <View style={{ flex: 1, position: 'relative' }}>
       {userToken === null ? (
-        <LoginScreen onLoginSuccess={(token: string) => setUserToken(token)} />
+        <LoginScreen onLoginSuccess={(token: string, targetScreen: string = 'Directory') => {
+          setPostLoginNavigate(targetScreen);
+          setUserToken(token);
+          setTimeout(() => {
+            if (navigationRef.isReady()) {
+              navigationRef.navigate(targetScreen as never);
+            }
+          }, 150);
+        }} />
       ) : (
-        <NavigationContainer ref={navigationRef}>
+        <NavigationContainer
+          ref={navigationRef}
+          onReady={() => {
+            if (postLoginNavigate && navigationRef.isReady()) {
+              navigationRef.navigate(postLoginNavigate as never);
+              setPostLoginNavigate(null);
+            }
+          }}
+        >
           <Tab.Navigator
             backBehavior="history"
             tabBar={(props) => <CustomTabBar {...props} />}
