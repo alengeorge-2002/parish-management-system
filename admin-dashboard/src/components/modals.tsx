@@ -435,20 +435,18 @@ export function MemberModal({
               className="flex items-center gap-2"
             >
               <span
-                className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[11px] font-bold transition-colors ${
-                  i < step
+                className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[11px] font-bold transition-colors ${i < step
                     ? "bg-primary text-primary-foreground"
                     : i === step
                       ? "bg-primary/15 text-primary ring-1 ring-primary"
                       : "bg-secondary text-muted-foreground"
-                }`}
+                  }`}
               >
                 {i < step ? <Check className="h-3 w-3" /> : i + 1}
               </span>
               <span
-                className={`hidden text-[12px] font-medium sm:block ${
-                  i === step ? "text-foreground" : "text-muted-foreground"
-                }`}
+                className={`hidden text-[12px] font-medium sm:block ${i === step ? "text-foreground" : "text-muted-foreground"
+                  }`}
               >
                 {label}
               </span>
@@ -569,7 +567,6 @@ export function MemberModal({
               onChange={(e) => { setFormData({ ...formData, relationshipToHead: e.target.value }); setErrors((p) => ({ ...p, relationshipToHead: "" })); }}
               className={errors.relationshipToHead ? "border-rose-500/80" : ""}
             >
-              <option value="Head of Household">Head of Household</option>
               <option value="Head of Family">Head of Family</option>
               <option value="Spouse">Spouse</option>
               <option value="Son">Son</option>
@@ -856,11 +853,11 @@ export function FamilyModal({
   const currentFamId = String(initialData?.id || initialData?._id || "");
   const householdMembers = initialData
     ? members.filter((m: any) => {
-        const mFamId = typeof m.familyId === 'object'
-          ? (m.familyId?.id || m.familyId?._id || "")
-          : (m.familyId || m.family_id || m.family || "");
-        return String(mFamId) === currentFamId;
-      })
+      const mFamId = typeof m.familyId === 'object'
+        ? (m.familyId?.id || m.familyId?._id || "")
+        : (m.familyId || m.family_id || m.family || "");
+      return String(mFamId) === currentFamId;
+    })
     : [];
 
   const handleSave = async () => {
@@ -1525,9 +1522,8 @@ function PhotoDropzone({
       <span className="text-[12px] font-medium text-muted-foreground">{label}</span>
       {preview ? (
         <div
-          className={`relative overflow-hidden rounded-[10px] border border-border bg-[#161922] ${
-            aspect === "square" ? "h-32 w-32" : "aspect-[16/9] w-full"
-          }`}
+          className={`relative overflow-hidden rounded-[10px] border border-border bg-[#161922] ${aspect === "square" ? "h-32 w-32" : "aspect-[16/9] w-full"
+            }`}
         >
           <img
             src={preview}
@@ -1547,9 +1543,8 @@ function PhotoDropzone({
         </div>
       ) : (
         <label
-          className={`flex flex-col items-center justify-center gap-2 rounded-[10px] border border-dashed border-border-strong bg-input text-muted-foreground transition-colors hover:border-primary/50 hover:text-foreground cursor-pointer ${
-            aspect === "square" ? "h-32 w-full" : "aspect-[16/9] w-full"
-          }`}
+          className={`flex flex-col items-center justify-center gap-2 rounded-[10px] border border-dashed border-border-strong bg-input text-muted-foreground transition-colors hover:border-primary/50 hover:text-foreground cursor-pointer ${aspect === "square" ? "h-32 w-full" : "aspect-[16/9] w-full"
+            }`}
         >
           <input type="file" accept="image/*" className="hidden" onChange={handleFileChange} />
           <div className="flex h-10 w-10 items-center justify-center rounded-full bg-secondary">
@@ -1610,8 +1605,8 @@ export function FamilyDetailsModal({
   const houseName = typeof family.house === 'object'
     ? (family.house?.house_name || family.house?.familyName || family.house?.name || "Household")
     : (typeof family.houseName === 'object'
-        ? (family.houseName?.house_name || family.houseName?.familyName || "Household")
-        : (family.houseName || family.house || family.familyName || family.house_name || "Household"));
+      ? (family.houseName?.house_name || family.houseName?.familyName || "Household")
+      : (family.houseName || family.house || family.familyName || family.house_name || "Household"));
 
   const familyCode = typeof family.id === 'object'
     ? (family.id?._id || String(family.id))
@@ -1620,30 +1615,30 @@ export function FamilyDetailsModal({
   const headName = typeof family.head === 'object'
     ? (family.head?.full_name || family.head?.name || (family.head?.first_name ? `${family.head.first_name} ${family.head.last_name || ''}` : "Family Head"))
     : (typeof family.headOfFamily === 'object'
-        ? (family.headOfFamily?.first_name ? `${family.headOfFamily.first_name} ${family.headOfFamily.last_name || ''}` : family.headOfFamily?.full_name || family.headOfFamily?.name || "Family Head")
-        : (typeof family.head_of_family === 'object'
-            ? (family.head_of_family?.full_name || family.head_of_family?.name || "Family Head")
-            : (family.headOfFamily || family.head_of_family || family.head || "N/A")));
+      ? (family.headOfFamily?.first_name ? `${family.headOfFamily.first_name} ${family.headOfFamily.last_name || ''}` : family.headOfFamily?.full_name || family.headOfFamily?.name || "Family Head")
+      : (typeof family.head_of_family === 'object'
+        ? (family.head_of_family?.full_name || family.head_of_family?.name || "Family Head")
+        : (family.headOfFamily || family.head_of_family || family.head || "N/A")));
 
   const phone = typeof family.phone === 'object'
     ? (family.phone?.phone_number || family.phone?.contact_number || "")
     : (typeof family.contactNumber === 'object'
-        ? (family.contactNumber?.phone || "")
-        : (family.phone || family.contactNumber || family.contact_number || "+91 98765 43210"));
+      ? (family.contactNumber?.phone || "")
+      : (family.phone || family.contactNumber || family.contact_number || "+91 98765 43210"));
 
   const email = typeof family.email === 'object' ? "" : (family.email || "household@parish.org");
 
   const address = typeof family.homeAddress === 'object'
     ? (family.homeAddress?.address || "Parish Ward Subdivision")
     : (typeof family.address === 'object'
-        ? (family.address?.home_address || "Parish Ward Subdivision")
-        : (family.homeAddress || family.address || "Parish Ward Subdivision"));
+      ? (family.address?.home_address || "Parish Ward Subdivision")
+      : (family.homeAddress || family.address || "Parish Ward Subdivision"));
 
   const wardDisplay = typeof family.ward === 'object'
     ? (family.ward?.ward_name || family.ward?.wardName || `Ward #${family.ward?.ward_number || 1}`)
     : (typeof family.wardId === 'object'
-        ? (family.wardId?.ward_name || family.wardId?.wardName || `Ward #${family.wardId?.ward_number || 1}`)
-        : (family.wardPatron || family.ward_name || family.wardName || (typeof family.ward === 'string' || typeof family.ward === 'number' ? `Ward #${family.ward}` : "Ward Subdivision")));
+      ? (family.wardId?.ward_name || family.wardId?.wardName || `Ward #${family.wardId?.ward_number || 1}`)
+      : (family.wardPatron || family.ward_name || family.wardName || (typeof family.ward === 'string' || typeof family.ward === 'number' ? `Ward #${family.ward}` : "Ward Subdivision")));
 
   const rawPhoto = family.familyPhotoUrl || family.family_photo_url || family.banner;
   const photoUrl = getPhotoSrc(rawPhoto);
@@ -1763,11 +1758,11 @@ export function FamilyDetailsModal({
                     const name = typeof m?.name === 'object'
                       ? (m.name?.full_name || m.name?.name || "Member")
                       : (m?.name || `${m?.first_name || ""} ${m?.last_name || ""}`.trim() || m?.fullName || "Member");
-                    
+
                     const role = typeof m?.relationshipToHead === 'object'
                       ? "Member"
                       : (m?.relationshipToHead || m?.relationship_role || m?.relation || m?.relation_to_head || "Member");
-                    
+
                     const gender = typeof m?.gender === 'string' ? m.gender : (m?.sex || "Unspecified");
                     const blood = typeof m?.bloodGroup === 'string' ? m.bloodGroup : (m?.blood || m?.blood_group || "-");
                     const phoneNum = typeof m?.phone === 'string' ? m.phone : (m?.phone_number || "-");
