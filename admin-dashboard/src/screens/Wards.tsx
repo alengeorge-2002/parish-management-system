@@ -83,6 +83,30 @@ export default function Wards() {
     }
   };
 
+  const handleDeleteUnit = async (w: any, u: any) => {
+    const wardId = w.id || w._id || w.ward_number || w.wardNumber;
+    const wardName = w.ward_name || w.wardName || w.patron || `Ward #${w.ward_number || w.wardNumber}`;
+    const num = typeof u === "string" ? u : (u.unitNumber || u.unit_number || "");
+    const name = typeof u === "object" && (u.unitName || u.unit_name) ? ` (${u.unitName || u.unit_name})` : "";
+    const unitName = `${num}${name}`.trim() || "Unit";
+    const unitId = typeof u === "object" ? (u.id || u._id || num) : u;
+
+    if (!window.confirm(`Delete Unit ${unitName} from ${wardName}?`)) {
+      return;
+    }
+
+    try {
+      await fetchApi(`/wards/${wardId}/units/${unitId}`, {
+        method: "DELETE",
+      });
+      toast(`Unit ${unitName} deleted successfully`);
+      await loadData();
+    } catch (err: any) {
+      console.error("Failed to delete unit:", err);
+      toast(err.message || "Failed to delete unit");
+    }
+  };
+
   const handleAddUnitSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!unitModalWard) return;
@@ -184,12 +208,25 @@ export default function Wards() {
                 {unitsList.map((u: any, idx: number) => {
                   const num = typeof u === "string" ? u : (u.unitNumber || u.unit_number || `Unit ${idx + 1}`);
                   const name = typeof u === "object" && (u.unitName || u.unit_name) ? ` (${u.unitName || u.unit_name})` : "";
+                  const unitDisplayName = `${num}${name}`.trim();
                   return (
                     <span
-                      key={idx}
-                      className="px-2 py-0.5 text-xs rounded bg-[#1e222b] text-[#F4C430] border border-[#2d323e]"
+                      key={u?.id || u?._id || idx}
+                      className="inline-flex items-center px-2 py-0.5 text-xs rounded bg-[#1e222b] text-[#F4C430] border border-[#2d323e]"
                     >
-                      {num}{name}
+                      <span>{num}{name}</span>
+                      <button
+                        type="button"
+                        title={`Delete Unit ${unitDisplayName}`}
+                        aria-label={`Delete Unit ${unitDisplayName}`}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleDeleteUnit(w, u);
+                        }}
+                        className="text-zinc-400 hover:text-red-400 ml-1.5 cursor-pointer leading-none font-bold text-sm transition-colors focus:outline-none"
+                      >
+                        ×
+                      </button>
                     </span>
                   );
                 })}

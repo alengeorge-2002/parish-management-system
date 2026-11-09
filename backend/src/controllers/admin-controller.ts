@@ -527,6 +527,113 @@ export const addUnitToWard = async (req: Request, res: Response): Promise<any> =
   }
 };
 
+export const deleteUnit = async (req: Request, res: Response): Promise<any> => {
+  try {
+    const rawUnitId = req.params.unitId || req.params.id;
+    const rawWardId = req.params.wardId;
+
+    if (!rawUnitId) {
+      return res.status(400).json({
+        error: 'Valid unit identifier required',
+        message: 'Valid unit identifier required',
+      });
+    }
+
+    await ensureUnitsSchema();
+
+    // 1. Locate the unit record
+    let unit: any = null;
+    const parsedUnitId = parseId(rawUnitId);
+
+    if (parsedUnitId) {
+      const uRes = await pool.query(`SELECT * FROM units WHERE id = $1`, [parsedUnitId]);
+      if (uRes.rows.length > 0) {
+        unit = uRes.rows[0];
+      }
+    }
+
+    if (!unit && rawWardId) {
+      const parsedWardId = parseId(rawWardId);
+      if (parsedWardId) {
+        const uRes = await pool.query(
+          `SELECT * FROM units WHERE ward_id = $1 AND (unit_number = $2 OR unit_name = $2 OR id::text = $2) LIMIT 1`,
+          [parsedWardId, String(rawUnitId)]
+        );
+        if (uRes.rows.length > 0) {
+          unit = uRes.rows[0];
+        }
+      }
+    }
+
+    if (!unit) {
+      const uRes = await pool.query(
+        `SELECT * FROM units WHERE unit_number = $1 OR unit_name = $1 OR id::text = $1 LIMIT 1`,
+        [String(rawUnitId)]
+      );
+      if (uRes.rows.length > 0) {
+        unit = uRes.rows[0];
+      }
+    }
+
+    if (!unit) {
+      return res.status(404).json({
+        error: 'Unit not found',
+        message: 'Unit not found',
+      });
+    }
+
+    // 2. Check if any families or members are assigned to this unit_id or unit_number
+    let assignedCount = 0;
+    try {
+      const checkRes = await pool.query(
+        `SELECT COUNT(*)::int as count FROM families 
+         WHERE unit_id = $1 
+            OR (ward_id = $2 AND (unit_number = $3 OR unit_number = $4))`,
+        [unit.id, unit.ward_id, unit.unit_number, unit.unit_name || unit.unit_number]
+      );
+      assignedCount = Number(checkRes.rows[0]?.count) || 0;
+    } catch (_err) {
+      const fallbackRes = await pool.query(
+        `SELECT COUNT(*)::int as count FROM families 
+         WHERE unit_id = $1 OR unit_number = $2`,
+        [unit.id, unit.unit_number]
+      );
+      assignedCount = Number(fallbackRes.rows[0]?.count) || 0;
+    }
+
+    if (assignedCount > 0) {
+      return res.status(400).json({
+        error: 'Cannot remove unit because families are currently assigned to it. Please reassign the families first.',
+        message: 'Cannot remove unit because families are currently assigned to it. Please reassign the families first.',
+      });
+    }
+
+    // 3. Delete unit from database
+    await pool.query(`DELETE FROM units WHERE id = $1`, [unit.id]);
+
+    // 4. Keep ward's total_units count in sync
+    if (unit.ward_id) {
+      await pool.query(
+        `UPDATE wards SET total_units = (SELECT count(*)::int FROM units WHERE ward_id = $1) WHERE id = $1`,
+        [unit.ward_id]
+      );
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: 'Unit deleted successfully',
+      deletedUnitId: unit.id,
+      wardId: unit.ward_id,
+    });
+  } catch (error: any) {
+    console.error('Error in deleteUnit:', error);
+    return res.status(500).json({
+      error: error.message || 'Internal server error while deleting unit',
+      message: error.message || 'Internal server error while deleting unit',
+    });
+  }
+};
+
 /*** Family & Member JSON Mapping Helpers ***/
 export const mapFamilyRow = (row: any) => {
   const wObj = typeof row.ward === 'object' ? row.ward : (typeof row.ward_id === 'object' ? row.ward_id : null);

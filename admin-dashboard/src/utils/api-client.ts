@@ -102,6 +102,9 @@ export const wardsApi = {
   delete: (id: string | number) => fetchApi(`/admin/wards/${id}`, {
     method: 'DELETE',
   }),
+  deleteUnit: (wardId: string | number, unitId: string | number) => fetchApi(`/wards/${wardId}/units/${unitId}`, {
+    method: 'DELETE',
+  }),
 };
 
 export interface FamilyData {

@@ -74,14 +74,21 @@ export const autoInitializeDb = async () => {
       ALTER TABLE units ADD COLUMN IF NOT EXISTS representative_phone VARCHAR(50);
     `);
 
-    await pool.query(`
-      INSERT INTO units (unit_number, unit_name, ward_id)
-      VALUES 
-        ('101', 'Unit 101', 1),
-        ('202', 'Unit 202', 2),
-        ('5', 'Unit 5', 3)
-      ON CONFLICT DO NOTHING;
-    `).catch(() => {});
+    const existingUnits = await pool.query('SELECT ward_id, unit_number FROM units').catch(() => ({ rows: [] }));
+    const existingUnitsSet = new Set((existingUnits.rows || []).map((r: any) => `${r.ward_id}_${r.unit_number}`));
+    const defaultUnits = [
+      { unit_number: '101', unit_name: 'Unit 101', ward_id: 1 },
+      { unit_number: '202', unit_name: 'Unit 202', ward_id: 2 },
+      { unit_number: '5', unit_name: 'Unit 5', ward_id: 3 },
+    ];
+    for (const du of defaultUnits) {
+      if (!existingUnitsSet.has(`${du.ward_id}_${du.unit_number}`)) {
+        await pool.query(
+          `INSERT INTO units (unit_number, unit_name, ward_id) VALUES ($1, $2, $3)`,
+          [du.unit_number, du.unit_name, du.ward_id]
+        ).catch(() => {});
+      }
+    }
 
     // 3. Ensure clergy_directory schema and display_order column are aligned
     await pool.query(`

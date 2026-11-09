@@ -15,6 +15,7 @@ import {
   updateWard,
   deleteWard,
   addUnitToWard,
+  deleteUnit,
   getAllFamilies,
   getFamilyById,
   createFamily,
@@ -46,6 +47,9 @@ router.post('/wards', createWard);
 router.put('/wards/:id', updateWard);
 router.delete('/wards/:id', deleteWard);
 router.post('/wards/:id/units', addUnitToWard);
+router.delete('/wards/:wardId/units/:unitId', deleteUnit);
+router.delete('/wards/:id/units/:unitId', deleteUnit);
+router.delete('/units/:unitId', deleteUnit);
 
 router.get('/families', getAllFamilies);
 router.get('/families/:id', getFamilyById);

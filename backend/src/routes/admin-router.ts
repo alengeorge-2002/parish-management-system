@@ -9,6 +9,7 @@ import {
   updateWard,
   deleteWard,
   addUnitToWard,
+  deleteUnit,
   getAllFamilies,
   getFamilyById,
   createFamily,
@@ -70,6 +71,9 @@ router.delete('/users/:id', deleteUser);
 // Ward management write
 router.post('/wards', createWard);
 router.post('/wards/:id/units', addUnitToWard);
+router.delete('/wards/:wardId/units/:unitId', deleteUnit);
+router.delete('/wards/:id/units/:unitId', deleteUnit);
+router.delete('/units/:unitId', deleteUnit);
 router.put('/wards/:id', updateWard);
 router.delete('/wards/:id', deleteWard);
 
