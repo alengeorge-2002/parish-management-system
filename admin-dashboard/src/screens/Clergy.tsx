@@ -1,9 +1,51 @@
 import { useEffect, useState } from "react";
 import { Phone, Upload, Pencil, CalendarClock, Plus, Trash2 } from "lucide-react";
 import { Card, Pill, Button, IconButton } from "../components/ui";
-import { ClergyModal } from "../components/modals";
+import { ClergyModal, getPhotoSrc } from "../components/modals";
 import { useApp } from "../lib/app-context";
 import { clergyApi } from "../utils/api-client";
+
+function ClergyHeadshot({
+  portrait,
+  name,
+  isPrimary,
+}: {
+  portrait?: string;
+  name: string;
+  isPrimary?: boolean;
+}) {
+  const [hasError, setHasError] = useState(false);
+  const src = portrait ? getPhotoSrc(portrait) : null;
+  const initials =
+    name
+      .split(" ")
+      .filter(Boolean)
+      .slice(0, 2)
+      .map((w) => w[0])
+      .join("")
+      .toUpperCase() || "C";
+
+  return (
+    <div
+      className={`relative h-20 w-20 shrink-0 overflow-hidden rounded-xl border border-[#F4C430]/30 bg-zinc-800 flex items-center justify-center ${
+        isPrimary ? "ring-2 ring-primary ring-offset-2 ring-offset-card" : ""
+      }`}
+    >
+      {src && !hasError ? (
+        <img
+          src={src}
+          alt={name}
+          className="h-full w-full object-cover"
+          onError={() => setHasError(true)}
+        />
+      ) : (
+        <div className="flex h-full w-full flex-col items-center justify-center bg-[#181b22] text-[#F4C430]">
+          <span className="font-display text-[15px] font-bold tracking-wider">{initials}</span>
+        </div>
+      )}
+    </div>
+  );
+}
 
 export default function Clergy() {
   const { tt, lang, toast } = useApp();
@@ -92,13 +134,7 @@ export default function Clergy() {
             className={`overflow-hidden ${c.primary ? "sm:col-span-2 xl:col-span-1" : ""}`}
           >
             <div className="flex items-center gap-4 p-5">
-              <div
-                className={`relative aspect-square w-24 shrink-0 overflow-hidden rounded-[14px] ${
-                  c.primary ? "ring-2 ring-primary ring-offset-2 ring-offset-card" : ""
-                }`}
-              >
-                <img src={c.portrait} alt={c.name} className="h-full w-full object-cover" />
-              </div>
+              <ClergyHeadshot portrait={c.portrait} name={c.name} isPrimary={c.primary} />
               <div className="min-w-0 flex-1">
                 <Pill tone={c.primary ? "gold" : "neutral"} className="uppercase">
                   {c.title}

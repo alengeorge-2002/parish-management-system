@@ -22,13 +22,18 @@ export const createClergy = async (req: Request, res: Response): Promise<any> =>
   const addr = address || bio || null;
   const ph = phone_number || phone || null;
 
-  let avatar_url: string | null = null;
-  if (req.file) {
+  const photoUrl =
+    req.file?.path ||
+    (req.file as any)?.secure_url ||
+    req.body.avatarUrl ||
+    req.body.avatar_url ||
+    req.body.photoUrl ||
+    req.body.photo_url ||
+    null;
+
+  let avatar_url: string | null = photoUrl;
+  if (req.file && !avatar_url?.startsWith('http') && req.file.filename) {
     avatar_url = `/uploads/clergy-avatars/${req.file.filename}`;
-  } else if (req.body.avatarUrl) {
-    avatar_url = req.body.avatarUrl;
-  } else if (req.body.avatar_url) {
-    avatar_url = req.body.avatar_url;
   }
 
   const parsedHouseId = parseId(house_id);
@@ -74,13 +79,19 @@ export const updateClergy = async (req: Request, res: Response): Promise<any> =>
     }
     const existing = existingResult.rows[0];
 
-    let avatar_url = existing.avatar_url || null;
-    if (req.file) {
+    const photoUrl =
+      req.file?.path ||
+      (req.file as any)?.secure_url ||
+      req.body.avatarUrl ||
+      req.body.avatar_url ||
+      req.body.photoUrl ||
+      req.body.photo_url ||
+      existing.avatar_url ||
+      null;
+
+    let avatar_url = photoUrl;
+    if (req.file && !avatar_url?.startsWith('http') && req.file.filename) {
       avatar_url = `/uploads/clergy-avatars/${req.file.filename}`;
-    } else if (req.body.avatarUrl) {
-      avatar_url = req.body.avatarUrl;
-    } else if (req.body.avatar_url) {
-      avatar_url = req.body.avatar_url;
     }
 
     const parsedHouseId = house_id !== undefined ? parseId(house_id) : existing.house_id;

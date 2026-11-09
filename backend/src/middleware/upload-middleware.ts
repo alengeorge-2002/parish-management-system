@@ -71,6 +71,16 @@ export const uploadFamilyPhoto = multer({
   }
 });
 
+// Cloudinary storage engine for clergy portraits
+const cloudinaryClergyStorage = new CloudinaryStorage({
+  cloudinary: cloudinary,
+  params: {
+    folder: 'parish/clergy',
+    allowed_formats: ['jpg', 'jpeg', 'png', 'webp'],
+    transformation: [{ width: 800, height: 800, crop: 'fill', gravity: 'face', quality: 'auto' }],
+  } as any,
+});
+
 const clergyStorage = multer.diskStorage({
   destination: (_req: Request, _file: Express.Multer.File, cb: (error: Error | null, destination: string) => void) => {
     const uploadDir = getUploadSubdir('clergy-avatars');
@@ -83,10 +93,12 @@ const clergyStorage = multer.diskStorage({
   }
 });
 
-export const uploadClergyAvatar = multer({
-  storage: clergyStorage,
+export const uploadClergyPhoto = multer({
+  storage: isCloudinaryConfigured ? cloudinaryClergyStorage : clergyStorage,
   fileFilter: fileFilter,
   limits: {
     fileSize: 5 * 1024 * 1024 // 5MB limit
   }
 });
+
+export const uploadClergyAvatar = uploadClergyPhoto;

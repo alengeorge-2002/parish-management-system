@@ -27,12 +27,13 @@ import {
   deleteMember,
 } from '../controllers/admin-controller';
 import { getClergy } from '../controllers/clergy-controller';
+import { createClergy, updateClergy, deleteClergy } from '../controllers/admin-clergy-controller';
 import { getAllReligiousHouses } from '../controllers/religious-house-controller';
 import { getMinistriesDirectory } from '../controllers/ministry-controller';
 import { search } from '../controllers/directory-controller';
 import { getQuickContacts } from '../controllers/parish-council-controller';
 import { validateCreateFamily, validateCreateMember } from '../middleware/validate';
-import { uploadFamilyPhoto } from '../middleware/upload-middleware';
+import { uploadFamilyPhoto, uploadClergyPhoto } from '../middleware/upload-middleware';
 
 const router = Router();
 
@@ -40,6 +41,22 @@ const directFamilyPhotoUpload = uploadFamilyPhoto.fields([
   { name: 'familyPhoto', maxCount: 1 },
   { name: 'family_photo', maxCount: 1 },
 ]);
+
+const directClergyPhotoUpload = uploadClergyPhoto.fields([
+  { name: 'photo', maxCount: 1 },
+  { name: 'avatar', maxCount: 1 },
+  { name: 'avatarPhoto', maxCount: 1 },
+]);
+const handleDirectClergyUpload = (req: any, res: any, next: any) => {
+  directClergyPhotoUpload(req, res, (err: any) => {
+    if (err) return next(err);
+    if (req.files) {
+      const files = req.files as { [fieldname: string]: Express.Multer.File[] };
+      req.file = files['photo']?.[0] || files['avatar']?.[0] || files['avatarPhoto']?.[0] || req.file;
+    }
+    next();
+  });
+};
 
 // Core direct API route aliases
 router.get('/wards', getAllWards);
@@ -64,6 +81,9 @@ router.delete('/members/:id', deleteMember);
 
 // Direct public directory endpoints
 router.get('/clergy', getClergy);
+router.post('/clergy', handleDirectClergyUpload, createClergy);
+router.put('/clergy/:id', handleDirectClergyUpload, updateClergy);
+router.delete('/clergy/:id', deleteClergy);
 router.get('/clergy/quick-contacts', getQuickContacts);
 router.get('/religious-houses', getAllReligiousHouses);
 router.get('/ministries', getMinistriesDirectory);

@@ -1378,23 +1378,27 @@ export function ClergyModal({
   const handleSave = async () => {
     setSaving(true);
     try {
+      const fd = new FormData();
+      fd.append("name", formData.name);
+      fd.append("title", formData.title);
+      fd.append("designation", formData.title);
+      fd.append("role", formData.role);
+      fd.append("role_type", formData.role);
+      fd.append("phone", formData.phone);
+      fd.append("phone_number", formData.phone);
+      fd.append("email", formData.email);
+      fd.append("bio", formData.bio);
+      fd.append("address", formData.bio);
       if (avatarFile) {
-        const fd = new FormData();
-        fd.append("name", formData.name);
-        fd.append("title", formData.title);
-        fd.append("designation", formData.title);
-        fd.append("role", formData.role);
-        fd.append("role_type", formData.role);
-        fd.append("phone", formData.phone);
-        fd.append("phone_number", formData.phone);
-        fd.append("email", formData.email);
-        fd.append("bio", formData.bio);
-        fd.append("address", formData.bio);
+        fd.append("photo", avatarFile);
+        fd.append("avatar", avatarFile);
         fd.append("avatarPhoto", avatarFile);
-        await onSave(fd);
-      } else {
-        await onSave(formData);
+      } else if (initialData?.portrait || initialData?.avatar_url || initialData?.avatarUrl) {
+        const existingUrl = initialData?.portrait || initialData?.avatar_url || initialData?.avatarUrl;
+        fd.append("avatarUrl", existingUrl);
+        fd.append("avatar_url", existingUrl);
       }
+      await onSave(fd);
       onClose();
     } catch (e) {
       console.error(e);

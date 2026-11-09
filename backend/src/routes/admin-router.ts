@@ -22,7 +22,7 @@ import {
   importMembersBulk,
 } from '../controllers/admin-controller';
 import { requireAuth, requireAdmin } from '../middleware/auth-middleware';
-import { uploadFamilyPhoto, uploadClergyAvatar } from '../middleware/upload-middleware';
+import { uploadFamilyPhoto, uploadClergyPhoto, uploadClergyAvatar } from '../middleware/upload-middleware';
 import { createClergy, updateClergy, deleteClergy } from '../controllers/admin-clergy-controller';
 import {
   validateCreateUser,
@@ -93,8 +93,23 @@ router.put('/members/:id', updateMember);
 router.delete('/members/:id', deleteMember);
 
 // Clergy management write
-router.post('/clergy', uploadClergyAvatar.single('avatarPhoto'), createClergy);
-router.put('/clergy/:id', uploadClergyAvatar.single('avatarPhoto'), updateClergy);
+const clergyPhotoUpload = uploadClergyPhoto.fields([
+  { name: 'photo', maxCount: 1 },
+  { name: 'avatar', maxCount: 1 },
+  { name: 'avatarPhoto', maxCount: 1 },
+]);
+const handleClergyUpload = (req: any, res: any, next: any) => {
+  clergyPhotoUpload(req, res, (err: any) => {
+    if (err) return next(err);
+    if (req.files) {
+      const files = req.files as { [fieldname: string]: Express.Multer.File[] };
+      req.file = files['photo']?.[0] || files['avatar']?.[0] || files['avatarPhoto']?.[0] || req.file;
+    }
+    next();
+  });
+};
+router.post('/clergy', handleClergyUpload, createClergy);
+router.put('/clergy/:id', handleClergyUpload, updateClergy);
 router.delete('/clergy/:id', deleteClergy);
 
 // Religious houses management write

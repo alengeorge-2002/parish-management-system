@@ -25,6 +25,34 @@ const DEFAULT_FALLBACK_CONTACTS = [
   { role: 'Parish Secretary', role_title: 'Parish Secretary', name: 'Adv. Mary Antony', phone: '+91 94471 00003', phone_number: '+91 94471 00003' },
 ];
 
+function ClergyHeadshotImage({
+  uri,
+  style,
+  resizeMode = 'cover',
+  accessibilityLabel,
+  fallback,
+}: {
+  uri?: string;
+  style: any;
+  resizeMode?: any;
+  accessibilityLabel?: string;
+  fallback: React.ReactNode;
+}) {
+  const [error, setError] = useState(false);
+  if (!uri || error) {
+    return <>{fallback}</>;
+  }
+  return (
+    <Image
+      source={{ uri }}
+      style={style}
+      resizeMode={resizeMode}
+      accessibilityLabel={accessibilityLabel}
+      onError={() => setError(true)}
+    />
+  );
+}
+
 export default function DirectoryScreen() {
   const { colors, isDark } = useTheme();
   const styles = getStyles(colors, isDark);
@@ -613,16 +641,12 @@ export default function DirectoryScreen() {
                 </View>
               ) : (
                 <View style={styles.largeAvatarCircle}>
-                  {selectedProfile.avatarUrl ? (
-                    <Image 
-                      source={{ uri: selectedProfile.avatarUrl }} 
-                      style={{ width: '100%', height: '100%', borderRadius: 37 }} 
-                      resizeMode="cover"
-                      accessibilityLabel="Clergy Avatar"
-                    />
-                  ) : (
-                    <Text style={styles.largeAvatarInitials}>{selectedProfile.avatar}</Text>
-                  )}
+                  <ClergyHeadshotImage
+                    uri={selectedProfile.avatarUrl}
+                    style={{ width: '100%', height: '100%', borderRadius: 37 }}
+                    accessibilityLabel="Clergy Avatar"
+                    fallback={<Text style={styles.largeAvatarInitials}>{selectedProfile.avatar}</Text>}
+                  />
                 </View>
               )}
               <Text style={styles.detailsName}>{t(selectedProfile.name)}</Text>
@@ -850,16 +874,12 @@ export default function DirectoryScreen() {
                             <View style={styles.priestCardTopAccent} />
                             <View style={styles.priestCardHeader}>
                               <View style={styles.priestAvatarSquare}>
-                                {item.avatarUrl ? (
-                                  <Image 
-                                    source={{ uri: item.avatarUrl }} 
-                                    style={{ width: '100%', height: '100%', borderRadius: 16 }} 
-                                    resizeMode="cover"
-                                    accessibilityLabel="Priest Avatar"
-                                  />
-                                ) : (
-                                  <Text style={styles.priestAvatarText}>{item.avatar}</Text>
-                                )}
+                                <ClergyHeadshotImage
+                                  uri={item.avatarUrl}
+                                  style={{ width: '100%', height: '100%', borderRadius: 16 }}
+                                  accessibilityLabel="Priest Avatar"
+                                  fallback={<Text style={styles.priestAvatarText}>{item.avatar}</Text>}
+                                />
                               </View>
                               <View style={styles.priestHeaderInfo}>
                                 <Text style={styles.priestName}>{t(item.name).toUpperCase()}</Text>
@@ -899,16 +919,12 @@ export default function DirectoryScreen() {
                         {sisters.map((item) => (
                           <View key={item.id} style={styles.sisterRowCard}>
                             <View style={styles.sisterAvatarSquircle}>
-                              {item.avatarUrl ? (
-                                <Image 
-                                  source={{ uri: item.avatarUrl }} 
-                                  style={{ width: '100%', height: '100%', borderRadius: 14 }} 
-                                  resizeMode="cover"
-                                  accessibilityLabel="Sister Avatar"
-                                />
-                              ) : (
-                                <Text style={styles.sisterAvatarText}>{item.avatar}</Text>
-                              )}
+                              <ClergyHeadshotImage
+                                uri={item.avatarUrl}
+                                style={{ width: '100%', height: '100%', borderRadius: 14 }}
+                                accessibilityLabel="Sister Avatar"
+                                fallback={<Text style={styles.sisterAvatarText}>{item.avatar}</Text>}
+                              />
                             </View>
                             <View style={styles.sisterInfo}>
                               <Text style={styles.sisterName}>{t(item.name)}</Text>
