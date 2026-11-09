@@ -38,6 +38,7 @@ export default function FamilyTableView() {
   const [members, setMembers] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedMember, setSelectedMember] = useState<any | null>(null);
+  const [photoError, setPhotoError] = useState(false);
 
   useEffect(() => {
     const fetchFamilyMembers = async () => {
@@ -164,16 +165,25 @@ export default function FamilyTableView() {
         <ScrollView style={styles.scrollBody} contentContainerStyle={styles.scrollBodyContent}>
           {/* Family Group Photo Banner and Summary at the top */}
           <View style={styles.summaryCard}>
-            {groupPhotoUrl ? (
+            {groupPhotoUrl && !photoError ? (
               <View style={styles.bannerContainer}>
                 <Image 
                   source={{ uri: groupPhotoUrl }}
                   style={styles.bannerImage}
                   resizeMode="cover"
+                  onError={() => setPhotoError(true)}
                   accessibilityLabel="Family Group Photo"
                 />
               </View>
-            ) : null}
+            ) : (
+              <View style={styles.bannerContainer}>
+                <View style={styles.placeholderBox}>
+                  <Ionicons name="people-outline" size={44} color={colors.primary} />
+                  <Text style={styles.placeholderTitle}>{family.houseName || family.familyName || 'Family Household'}</Text>
+                  <Text style={styles.placeholderSubtitle}>{family.ward || ''}</Text>
+                </View>
+              </View>
+            )}
             <Text style={styles.summaryHouse}>{family.houseName}</Text>
             <Text style={styles.summaryAddress}>{family.homeAddress}</Text>
             <Text style={styles.summaryUnit}>
@@ -425,23 +435,49 @@ const getStyles = (colors: any, isDark: boolean) => StyleSheet.create({
     borderColor: colors.border,
     padding: 16,
     marginBottom: 20,
+    width: '100%',
+    maxWidth: 900,
+    alignSelf: 'center',
     ...Platform.select({
       web: { boxShadow: '0 4px 10px rgba(61,43,31,0.04)' }
     })
   },
   bannerContainer: {
     width: '100%',
-    height: 190,
-    borderRadius: 12,
+    maxWidth: 720,
+    aspectRatio: 16 / 9,
+    maxHeight: 360,
+    alignSelf: 'center',
+    borderRadius: 14,
     overflow: 'hidden',
-    marginBottom: 14,
-    backgroundColor: isDark ? '#181b22' : '#f0f0f0',
-    borderWidth: 1,
-    borderColor: colors.border,
+    marginTop: 4,
+    marginBottom: 16,
+    backgroundColor: isDark ? 'rgba(24, 27, 34, 0.5)' : 'rgba(235, 220, 195, 0.25)',
+    borderWidth: 1.5,
+    borderColor: isDark ? 'rgba(244, 196, 48, 0.2)' : 'rgba(244, 196, 48, 0.3)',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   bannerImage: {
     width: '100%',
     height: '100%',
+    borderRadius: 12,
+  },
+  placeholderBox: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 16,
+  },
+  placeholderTitle: {
+    fontSize: 15,
+    fontWeight: 'bold',
+    color: colors.foreground,
+    marginTop: 6,
+  },
+  placeholderSubtitle: {
+    fontSize: 12,
+    color: colors.textMuted,
+    marginTop: 2,
   },
   summaryHouse: {
     fontSize: 18,

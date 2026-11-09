@@ -1645,25 +1645,25 @@ export function FamilyDetailsModal({
     >
       <div className="space-y-5">
         {/* Family Header Banner & Info */}
-        <div className="relative overflow-hidden rounded-[12px] border border-border bg-card">
-          <div className="relative h-32 w-full overflow-hidden bg-[#161922] flex items-center justify-center">
+        <div className="relative overflow-hidden rounded-[16px] border border-border bg-card p-4 sm:p-5">
+          <div className="relative mx-auto my-2 aspect-[16/9] w-full max-w-2xl max-h-[360px] overflow-hidden rounded-xl border border-[#F4C430]/20 bg-[#181b22]/40 flex items-center justify-center shadow-inner">
             <div className="absolute inset-0 flex flex-col items-center justify-center text-muted-foreground/40 bg-gradient-to-br from-[#1a1e28] to-[#12141a]">
               <Home className="h-10 w-10 text-primary/30 mb-1" />
-              <span className="text-[11px] font-medium text-muted-foreground/60">{houseName}</span>
+              <span className="text-[12px] font-medium text-muted-foreground/60">{houseName}</span>
             </div>
             {photoUrl ? (
               <img
                 src={photoUrl}
                 alt={String(houseName)}
-                className="relative z-10 h-full w-full object-cover"
+                className="relative z-10 h-full w-full object-cover rounded-xl"
                 onError={(e) => {
                   (e.target as HTMLElement).style.display = 'none';
                 }}
               />
             ) : null}
-            <div className="absolute inset-0 z-20 pointer-events-none bg-gradient-to-t from-black/60 to-transparent" />
+            <div className="absolute inset-0 z-20 pointer-events-none bg-gradient-to-t from-black/50 via-transparent to-transparent" />
           </div>
-          <div className="p-4 sm:p-5">
+          <div className="pt-2">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div>
                 <div className="flex flex-wrap items-center gap-2">
