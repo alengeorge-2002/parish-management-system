@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { CheckCircle2, X, Cross, Lock, Key, Eye, EyeOff } from "lucide-react";
+import { CheckCircle2, X } from "lucide-react";
 import { AppProvider, useApp } from "./lib/app-context";
 import Sidebar from "./components/Sidebar";
 import Header from "./components/Header";
@@ -14,7 +14,7 @@ import Clergy from "./screens/Clergy";
 import Houses from "./screens/Houses";
 import Ministries from "./screens/Ministries";
 import Council from "./screens/Council";
-import { Card, Button, Input, Field } from "./components/ui";
+import Login from "./screens/Login";
 import { getSession, setSession, clearSession, fetchApi, type UserSession } from "./utils/api-client";
 
 function ToastHost() {
@@ -94,8 +94,6 @@ function Shell({ session, onLogout }: { session: UserSession; onLogout: () => vo
 
 export default function App() {
   const [session, setSessionState] = useState<UserSession | null>(null);
-  const [accessKey, setAccessKey] = useState("");
-  const [showKey, setShowKey] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [verifying, setVerifying] = useState(true);
@@ -108,15 +106,15 @@ export default function App() {
     setVerifying(false);
   }, []);
 
-  const handleLogin = async () => {
-    if (!accessKey.trim()) return;
+  const handleLogin = async (key: string) => {
+    if (!key.trim()) return;
 
     setLoading(true);
     setError(null);
     try {
       const data = await fetchApi("/auth/login", {
         method: "POST",
-        body: JSON.stringify({ accessKey: accessKey.trim() }),
+        body: JSON.stringify({ accessKey: key.trim() }),
       });
 
       if (data && data.token) {
@@ -161,56 +159,7 @@ export default function App() {
   }
 
   if (!session) {
-    return (
-      <div className="flex h-full w-full items-center justify-center bg-background p-4 font-sans">
-        <Card className="w-full max-w-md p-6 shadow-2xl">
-          <div className="mb-6 flex flex-col items-center text-center">
-            <div className="mb-3 flex h-14 w-14 items-center justify-center rounded-[14px] bg-gradient-to-br from-primary to-primary-hover shadow-[0_4px_20px_-4px_var(--primary)]">
-              <Cross className="h-7 w-7 text-primary-foreground" strokeWidth={2.5} />
-            </div>
-            <h2 className="font-display text-[22px] font-bold text-foreground">ST JOSEPH CHURCH DEVAGIRI PARISH</h2>
-            <p className="mt-1 font-mono text-[11px] font-bold tracking-wider text-primary uppercase">
-              ADMINISTRATIVE SANCTUM PORTAL
-            </p>
-          </div>
-
-          {error && (
-            <div className="mb-4 flex items-center gap-2.5 rounded-[8px] border border-danger/30 bg-danger/10 p-3 text-[12px] text-danger">
-              <X className="h-4 w-4 shrink-0" />
-              <span>Login Denied: {error}</span>
-            </div>
-          )}
-
-          <div className="space-y-4">
-            <Field label="Admin Access Key">
-              <div className="relative flex items-center">
-                <Key className="absolute left-3 h-4 w-4 text-muted-foreground" />
-                <Input
-                  type={showKey ? "text" : "password"}
-                  placeholder="Enter administrator access key"
-                  value={accessKey}
-                  onChange={(e) => setAccessKey(e.target.value)}
-                  className="pl-9 pr-9 text-center font-mono"
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowKey(!showKey)}
-                  className="absolute right-3 flex items-center justify-center text-muted-foreground hover:text-foreground focus:outline-none transition-colors"
-                  aria-label={showKey ? "Hide access key" : "Show access key"}
-                >
-                  {showKey ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                </button>
-              </div>
-            </Field>
-
-            <Button onClick={handleLogin} disabled={loading} className="w-full py-2.5">
-              <Lock className="h-4 w-4" />
-              {loading ? "Authenticating..." : "Secure Administrator Login"}
-            </Button>
-          </div>
-        </Card>
-      </div>
-    );
+    return <Login onLogin={handleLogin} loading={loading} error={error} />;
   }
 
   return (

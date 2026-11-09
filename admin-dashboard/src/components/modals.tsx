@@ -23,6 +23,8 @@ export interface MemberFormData {
   bloodGroup: string;
   familyId: string;
   relationshipToHead: string;
+  isHeadOfHousehold?: boolean;
+  is_head_of_household?: boolean;
   wardId: string;
   ward_id?: string;
   wardNumber: string | number;
@@ -118,7 +120,8 @@ export function MemberModal({
         dob: initialData.dob || initialData.date_of_birth || "",
         bloodGroup: initialData.bloodGroup || initialData.blood_group || "O+",
         familyId: String(fId),
-        relationshipToHead: initialData.relationshipToHead || initialData.relationship_role || "Member",
+        relationshipToHead: initialData.relationshipToHead || initialData.relationship_role || (initialData.isHeadOfHousehold || initialData.is_head_of_household ? "Head of Household" : "Member"),
+        isHeadOfHousehold: Boolean(initialData.isHeadOfHousehold || initialData.is_head_of_household || initialData.relationshipToHead === "Head of Household" || initialData.relationship_role === "Head of Household" || initialData.relationshipToHead === "Head of Family" || initialData.relationship_role === "Head of Family"),
         wardId: String(wId),
         ward_id: String(wId),
         wardNumber: initialData.wardNumber || initialData.ward_number || "",
@@ -278,9 +281,19 @@ export function MemberModal({
     if (Object.keys(stepErrs).length > 0) { setErrors(stepErrs); return; }
     setSaving(true);
     try {
+      const isHead =
+        formData.relationshipToHead === "Head of Household" ||
+        formData.relationshipToHead === "Head of Family" ||
+        Boolean(formData.isHeadOfHousehold) ||
+        Boolean(formData.is_head_of_household);
+
       const finalUnit = formData.unit || selectedFamily?.unit || selectedFamily?.unit_number || "";
       const payload: any = {
         ...formData,
+        isHeadOfHousehold: isHead,
+        is_head_of_household: isHead,
+        relationshipToHead: formData.relationshipToHead || (isHead ? "Head of Household" : "Member"),
+        relationshipRole: formData.relationshipToHead || (isHead ? "Head of Household" : "Member"),
         unit: finalUnit,
         unit_number: finalUnit,
       };
@@ -532,6 +545,7 @@ export function MemberModal({
               onChange={(e) => { setFormData({ ...formData, relationshipToHead: e.target.value }); setErrors((p) => ({ ...p, relationshipToHead: "" })); }}
               className={errors.relationshipToHead ? "border-rose-500/80" : ""}
             >
+              <option value="Head of Household">Head of Household</option>
               <option value="Head of Family">Head of Family</option>
               <option value="Spouse">Spouse</option>
               <option value="Son">Son</option>
@@ -814,6 +828,17 @@ export function FamilyModal({
 
   const availableUnits = Array.isArray(selectedWard?.units) ? selectedWard.units : [];
 
+  // When editing an existing family, populate Head of Family options strictly from this family's members
+  const currentFamId = String(initialData?.id || initialData?._id || "");
+  const householdMembers = initialData
+    ? members.filter((m: any) => {
+        const mFamId = typeof m.familyId === 'object'
+          ? (m.familyId?.id || m.familyId?._id || "")
+          : (m.familyId || m.family_id || m.family || "");
+        return String(mFamId) === currentFamId;
+      })
+    : [];
+
   const handleSave = async () => {
     // --- Validate ---
     const errs: Record<string, string> = {};
@@ -925,19 +950,24 @@ export function FamilyModal({
             onChange={(e) => { setFormData({ ...formData, houseName: e.target.value }); setFamErrors((p) => ({ ...p, familyName: "" })); }}
           />
         </Field>
-        <Field label="Head of Family">
-          <Select
-            value={formData.headOfFamily}
-            onChange={(e) => setFormData({ ...formData, headOfFamily: e.target.value })}
-          >
-            <option value="">Select head of family</option>
-            {members.map((m: any) => (
-              <option key={m.id || m._id} value={m.id || m._id || m.name}>
-                {m.name || `${m.firstName || ''} ${m.lastName || ''}`.trim()}
-              </option>
-            ))}
-          </Select>
-        </Field>
+        {initialData && (
+          <Field label="Head of Family">
+            <Select
+              value={formData.headOfFamily}
+              onChange={(e) => setFormData({ ...formData, headOfFamily: e.target.value })}
+            >
+              <option value="">Select head of family</option>
+              {householdMembers.map((m: any) => {
+                const memberName = m.name || `${m.firstName || ''} ${m.lastName || ''}`.trim();
+                return (
+                  <option key={m.id || m._id} value={memberName}>
+                    {memberName}
+                  </option>
+                );
+              })}
+            </Select>
+          </Field>
+        )}
         <Field label="Ward Subdivision">
           <Select
             value={formData.wardId}

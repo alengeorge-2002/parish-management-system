@@ -786,6 +786,18 @@ export const updateFamily = async (req: Request, res: Response) => {
 
     if (result.rows.length === 0) return res.status(404).json({ error: 'Family not found' });
     const row = result.rows[0];
+
+    // If head_of_family is specified, sync the members of this family
+    if (head && typeof head === 'string' && head.trim()) {
+      const cleanHead = head.trim();
+      await pool.query('UPDATE members SET is_head_of_household = false WHERE family_id = $1', [id]);
+      await pool.query(
+        `UPDATE members SET is_head_of_household = true, relationship_role = 'Head of Household'
+         WHERE family_id = $1 AND (TRIM(CONCAT(first_name, ' ', last_name)) = $2 OR first_name = $2 OR TRIM(CONCAT(first_name, ' ', COALESCE(last_name, ''))) ILIKE $2)`,
+        [id, cleanHead]
+      );
+    }
+
     res.json(mapFamilyRow(row));
   } catch (error: any) {
     res.status(500).json({ error: error.message || 'Error updating family' });
@@ -879,7 +891,22 @@ export const createMember = async (req: Request, res: Response) => {
     }
 
     const rel = relationshipToHead || relationshipRole || relationship_role || relation_to_head || 'Member';
-    const head = isHeadOfHousehold !== undefined ? Boolean(isHeadOfHousehold) : Boolean(is_head_of_household);
+    const isHeadRequested = 
+      isHeadOfHousehold === true || 
+      isHeadOfHousehold === 'true' || 
+      is_head_of_household === true || 
+      is_head_of_household === 'true' ||
+      rel === 'Head of Household' ||
+      rel === 'Head of Family';
+    const head = Boolean(isHeadRequested);
+
+    // If this member is designated as Head of Household, demote any existing head in this family first
+    if (head && famId) {
+      await pool.query(
+        'UPDATE members SET is_head_of_household = false WHERE family_id = $1 AND is_head_of_household = true',
+        [famId]
+      );
+    }
 
     const isDirVisible = req.body.isDirectoryVisible !== undefined 
       ? Boolean(req.body.isDirectoryVisible) 
@@ -911,6 +938,15 @@ export const createMember = async (req: Request, res: Response) => {
 
     const row = result.rows[0];
     const memberId = row.id;
+
+    // Update parent family record so families.head_of_family stores this member's name
+    if (head && famId) {
+      const memberFullName = `${row.first_name || ''} ${row.last_name || ''}`.trim() || 'Head of Family';
+      await pool.query(
+        'UPDATE families SET head_of_family = $1 WHERE id = $2',
+        [memberFullName, famId]
+      );
+    }
 
     // Handle optional user account password creation
     const { password } = req.body;
@@ -969,7 +1005,34 @@ export const updateMember = async (req: Request, res: Response) => {
     const lName = lastName || last_name;
     const ph = phone || phoneNumber || phone_number;
     const rel = relationshipToHead || relationshipRole || relationship_role || relation_to_head;
-    const head = isHeadOfHousehold !== undefined ? Boolean(isHeadOfHousehold) : (is_head_of_household !== undefined ? Boolean(is_head_of_household) : undefined);
+    
+    // Check if head of household is designated
+    const isHeadRequested = 
+      isHeadOfHousehold === true || 
+      isHeadOfHousehold === 'true' || 
+      is_head_of_household === true || 
+      is_head_of_household === 'true' ||
+      rel === 'Head of Household' ||
+      rel === 'Head of Family';
+
+    const head = isHeadRequested ? true : (isHeadOfHousehold !== undefined ? Boolean(isHeadOfHousehold) : (is_head_of_household !== undefined ? Boolean(is_head_of_household) : undefined));
+
+    // Determine target family id
+    let targetFamId = famId;
+    if (!targetFamId) {
+      const cur = await pool.query('SELECT family_id FROM members WHERE id = $1', [id]);
+      if (cur.rows.length > 0) {
+        targetFamId = cur.rows[0].family_id;
+      }
+    }
+
+    // If this member is promoted to head of household, demote existing heads in this family first
+    if (head && targetFamId) {
+      await pool.query(
+        'UPDATE members SET is_head_of_household = false WHERE family_id = $1 AND is_head_of_household = true AND id != $2',
+        [targetFamId, id]
+      );
+    }
 
     const result = await pool.query(
       `UPDATE members SET
@@ -1000,6 +1063,15 @@ export const updateMember = async (req: Request, res: Response) => {
 
     if (result.rows.length === 0) return res.status(404).json({ error: 'Member not found' });
     const row = result.rows[0];
+
+    // If member is head of household, sync parent families.head_of_family
+    if (row.is_head_of_household && row.family_id) {
+      const memberFullName = `${row.first_name || ''} ${row.last_name || ''}`.trim() || 'Head of Family';
+      await pool.query(
+        'UPDATE families SET head_of_family = $1 WHERE id = $2',
+        [memberFullName, row.family_id]
+      );
+    }
 
     // Handle optional password update
     const { password, role: userRole } = req.body;
