@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { View, Text, TextInput, TouchableOpacity, ScrollView, StyleSheet, Platform, Alert, Linking, Image, RefreshControl } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, ScrollView, StyleSheet, Platform, Alert, Linking, Image, RefreshControl, useWindowDimensions } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import * as SecureStore from 'expo-secure-store';
 import { globalStyles, colors as staticColors, typography } from '../styles/accessible-theme';
@@ -113,6 +113,31 @@ export default function DirectoryScreen() {
   const styles = getStyles(colors, isDark);
   const { t } = useLanguage();
   const navigation = useNavigation();
+  const { width: windowWidth } = useWindowDimensions();
+  const gridColumns = windowWidth >= 1024 ? 3 : windowWidth >= 640 ? 2 : 1;
+  const clergyGridStyle: any =
+    Platform.OS === 'web'
+      ? {
+          display: 'grid',
+          gridTemplateColumns:
+            gridColumns === 3
+              ? 'repeat(3, minmax(0, 1fr))'
+              : gridColumns === 2
+                ? 'repeat(2, minmax(0, 1fr))'
+                : 'minmax(0, 1fr)',
+          gap: 24,
+        }
+      : {
+          flexDirection: 'row',
+          flexWrap: 'wrap',
+          gap: 16,
+        };
+  const clergyCardWidthStyle: any =
+    Platform.OS === 'web'
+      ? { width: '100%', height: '100%' }
+      : {
+          width: gridColumns === 3 ? '31.5%' : gridColumns === 2 ? '48%' : '100%',
+        };
   const [activeCategory, setActiveCategory] = useState<string | null>(null);
   const [selectedProfile, setSelectedProfile] = useState<any | null>(null);
   const [mainSearch, setMainSearch] = useState('');
@@ -589,6 +614,130 @@ export default function DirectoryScreen() {
 
   const displayedFamiliesSub = getFilteredFamiliesSub();
 
+  const renderClergySectionHeader = (titleEn: string, titleMl: string) => (
+    <View style={styles.clergySectionHeaderBlock}>
+      <View style={styles.clergySectionTitleRow}>
+        <Text style={styles.clergySectionTitleEn}>{titleEn}</Text>
+        <Text style={styles.clergySectionSubtitleMl}>· {titleMl}</Text>
+      </View>
+      <View style={styles.clergySectionDividerTrack}>
+        <View style={styles.clergySectionDividerAccent} />
+      </View>
+    </View>
+  );
+
+  const renderUnifiedClergyCard = (item: any) => {
+    const roleLabel = item.isVicar
+      ? (isMl ? 'വികാരി · ഇടവക വികാരി' : 'Vicar · Head of Parish')
+      : item.isAssistantVicar
+        ? (isMl ? 'സഹവികാരി' : 'Assistant Vicar')
+        : t(item.role);
+    const secondaryLine = item.email
+      ? item.email
+      : item.address
+        ? t(item.address)
+        : isMl
+          ? 'ദേവഗിരി ഇടവക'
+          : 'Devagiri Parish';
+
+    return (
+      <View
+        key={item.id}
+        style={[
+          styles.unifiedClergyCard,
+          clergyCardWidthStyle,
+          item.isVicar && styles.unifiedClergyCardVicar,
+        ]}
+      >
+        <View>
+          {/* Header & Identity */}
+          <View style={styles.unifiedCardHeader}>
+            <View style={styles.unifiedAvatarCircle}>
+              <ClergyHeadshotImage
+                uri={item.avatarUrl}
+                style={{ width: '100%', height: '100%', borderRadius: 28 }}
+                accessibilityLabel={t(item.name)}
+                fallback={<Text style={styles.unifiedAvatarInitials}>{item.avatar}</Text>}
+              />
+            </View>
+            <View style={styles.unifiedIdentityCol}>
+              <Text style={styles.unifiedClergyName} numberOfLines={2}>
+                {t(item.name)}
+              </Text>
+              <View
+                style={[
+                  styles.unifiedRoleBadge,
+                  item.isVicar ? styles.unifiedRoleBadgeVicar : styles.unifiedRoleBadgeNeutral,
+                ]}
+              >
+                <Text
+                  style={[
+                    styles.unifiedRoleBadgeText,
+                    item.isVicar ? styles.unifiedRoleBadgeTextVicar : styles.unifiedRoleBadgeTextNeutral,
+                  ]}
+                  numberOfLines={1}
+                >
+                  {roleLabel}
+                </Text>
+              </View>
+            </View>
+          </View>
+
+          {/* Middle Details Stack */}
+          <View style={styles.unifiedMiddleStack}>
+            <View style={styles.unifiedPhoneBox}>
+              <Ionicons
+                name="call-outline"
+                size={14}
+                color={isDark ? '#F4C430' : '#b45309'}
+              />
+              <Text style={styles.unifiedPhoneText} numberOfLines={1}>
+                {item.phone || (isMl ? 'ഇടവക ഓഫീസ്' : 'Contact Parish Office')}
+              </Text>
+            </View>
+            <View style={styles.unifiedEmailRow}>
+              <Ionicons
+                name={item.email ? 'mail-outline' : 'business-outline'}
+                size={13}
+                color={isDark ? '#a8a29e' : '#57534e'}
+              />
+              <Text style={styles.unifiedEmailText} numberOfLines={1}>
+                {secondaryLine}
+              </Text>
+            </View>
+          </View>
+        </View>
+
+        {/* Bottom Action Dock */}
+        <View style={styles.unifiedActionDock}>
+          <TouchableOpacity
+            style={styles.unifiedCallBtn}
+            onPress={() => handlePhonePress(item.phone)}
+            accessibilityLabel={`Call ${t(item.name)}`}
+            accessibilityRole="button"
+          >
+            <Ionicons name="call" size={14} color="#ffffff" />
+            <Text style={styles.unifiedCallBtnText}>{t('button-call') || 'Call'}</Text>
+          </TouchableOpacity>
+          {item.email ? (
+            <TouchableOpacity
+              style={styles.unifiedEmailIconBtn}
+              onPress={() => handleEmailPress(item.email)}
+              accessibilityLabel={`Email ${t(item.name)}`}
+              accessibilityRole="button"
+            >
+              <Ionicons
+                name="mail-outline"
+                size={16}
+                color={isDark ? '#F4C430' : '#44403c'}
+              />
+            </TouchableOpacity>
+          ) : null}
+        </View>
+      </View>
+    );
+  };
+
   return (
     <SafeAreaView style={styles.container}>
       {/* Header */}
@@ -974,85 +1123,21 @@ export default function DirectoryScreen() {
 
                     {/* Additional Linked Priests */}
                     {priests.length > 0 && (
-                      <View style={styles.listSection}>
-                        <Text style={styles.subSectionHeader}>{t('parish-priests-header')}</Text>
-                        {priests.map((item) => (
-                          <View key={item.id} style={styles.priestCard}>
-                            <View style={styles.priestCardTopAccent} />
-                            <View style={styles.priestCardHeader}>
-                              <View style={styles.priestAvatarSquare}>
-                                <ClergyHeadshotImage
-                                  uri={item.avatarUrl}
-                                  style={{ width: '100%', height: '100%', borderRadius: 16 }}
-                                  accessibilityLabel="Priest Avatar"
-                                  fallback={<Text style={styles.priestAvatarText}>{item.avatar}</Text>}
-                                />
-                              </View>
-                              <View style={styles.priestHeaderInfo}>
-                                <Text style={styles.priestName}>{t(item.name).toUpperCase()}</Text>
-                                <View style={styles.roleBadge}>
-                                  <Text style={styles.roleBadgeText}>
-                                    {item.isVicar
-                                      ? 'HEAD OF PARISH / വികാരി'
-                                      : item.isAssistantVicar
-                                        ? 'ASSISTANT VICAR / സഹവികാരി'
-                                        : t(item.role)}
-                                  </Text>
-                                </View>
-                              </View>
-                            </View>
-                            <View style={styles.priestDetailsContainer}>
-                              {item.phone && (
-                                <View style={styles.priestDetailsRow}>
-                                  <Ionicons name="call-outline" size={16} color={colors.textMuted} style={styles.detailsIcon} />
-                                  <Text style={styles.detailsText}>{item.phone}</Text>
-                                </View>
-                              )}
-                            </View>
-                            <View style={styles.priestActionButtonsRow}>
-                              <TouchableOpacity 
-                                style={styles.priestCallBtn}
-                                onPress={() => handlePhonePress(item.phone)}
-                                accessibilityLabel={`Call ${t(item.name)}`}
-                                accessibilityRole="button"
-                              >
-                                <Ionicons name="call-outline" size={18} color="#ffffff" style={{ marginRight: 6 }} />
-                                <Text style={styles.priestCallBtnText}>{t('button-call')}</Text>
-                              </TouchableOpacity>
-                            </View>
-                          </View>
-                        ))}
+                      <View>
+                        {renderClergySectionHeader('Parish Priests', 'വികാരിയും വൈദികരും')}
+                        <View style={clergyGridStyle}>
+                          {priests.map(renderUnifiedClergyCard)}
+                        </View>
                       </View>
                     )}
 
                     {/* Additional Linked Sisters */}
                     {sisters.length > 0 && (
-                      <View style={styles.listSection}>
-                        <Text style={styles.subSectionHeader}>{t('religious-sisters-header')}</Text>
-                        {sisters.map((item) => (
-                          <View key={item.id} style={styles.sisterRowCard}>
-                            <View style={styles.sisterAvatarSquircle}>
-                              <ClergyHeadshotImage
-                                uri={item.avatarUrl}
-                                style={{ width: '100%', height: '100%', borderRadius: 14 }}
-                                accessibilityLabel="Sister Avatar"
-                                fallback={<Text style={styles.sisterAvatarText}>{item.avatar}</Text>}
-                              />
-                            </View>
-                            <View style={styles.sisterInfo}>
-                              <Text style={styles.sisterName}>{t(item.name)}</Text>
-                              <Text style={styles.sisterSub}>{t(item.role)}{item.address ? ` - ${t(item.address)}` : ''}</Text>
-                            </View>
-                            <TouchableOpacity 
-                              style={styles.sisterCallBtn}
-                              onPress={() => handlePhonePress(item.phone)}
-                              accessibilityLabel={`Call ${t(item.name)}`}
-                              accessibilityRole="button"
-                            >
-                              <Ionicons name="call-outline" size={20} color={colors.darkGold} />
-                            </TouchableOpacity>
-                          </View>
-                        ))}
+                      <View>
+                        {renderClergySectionHeader('Religious Sisters', 'സന്യാസിനികൾ')}
+                        <View style={clergyGridStyle}>
+                          {sisters.map(renderUnifiedClergyCard)}
+                        </View>
                       </View>
                     )}
 
@@ -1144,7 +1229,7 @@ export default function DirectoryScreen() {
             )}
           </View>
         ) : activeCategory === 'priests' ? (
-          // PRIESTS & RELIGIOUS SUB-VIEW (Vicar Head of Parish displayed prominently at the top)
+          // PRIESTS & RELIGIOUS SUB-VIEW (Harmonized 1/2/3-col equal-height grid + section dividers)
           <View>
             <TextInput
               style={[globalStyles.input, styles.oversizedSearchBar]}
@@ -1156,155 +1241,29 @@ export default function DirectoryScreen() {
             />
 
             {parishPriests.length > 0 && (
-              <View style={styles.listSection}>
-                <Text style={styles.subSectionHeader}>{t('parish-priests-header')}</Text>
-                {parishPriests.map((item) => (
-                  <View
-                    key={item.id}
-                    style={[
-                      styles.priestCard,
-                      item.isVicar && { borderColor: '#c9a84c', borderWidth: 2 },
-                    ]}
-                  >
-                    <View style={styles.priestCardTopAccent} />
-                    <View style={styles.priestCardHeader}>
-                      <View style={styles.priestAvatarSquare}>
-                        <ClergyHeadshotImage
-                          uri={item.avatarUrl}
-                          style={{ width: '100%', height: '100%', borderRadius: 16 }}
-                          accessibilityLabel="Priest Avatar"
-                          fallback={<Text style={styles.priestAvatarText}>{item.avatar}</Text>}
-                        />
-                      </View>
-                      <View style={styles.priestHeaderInfo}>
-                        <Text style={styles.priestName}>{t(item.name).toUpperCase()}</Text>
-                        <View
-                          style={[
-                            styles.roleBadge,
-                            item.isVicar && {
-                              backgroundColor: isDark ? 'rgba(201, 168, 76, 0.2)' : '#fef3c7',
-                              borderColor: '#c9a84c',
-                            },
-                          ]}
-                        >
-                          <Text
-                            style={[
-                              styles.roleBadgeText,
-                              item.isVicar && { color: isDark ? '#F4C430' : '#92400e' },
-                            ]}
-                          >
-                            {item.isVicar
-                              ? 'HEAD OF PARISH / വികാരി'
-                              : item.isAssistantVicar
-                                ? 'ASSISTANT VICAR / സഹവികാരി'
-                                : t(item.role)}
-                          </Text>
-                        </View>
-                      </View>
-                    </View>
-                    <View style={styles.priestDetailsContainer}>
-                      {item.phone ? (
-                        <View style={styles.priestDetailsRow}>
-                          <Ionicons name="call-outline" size={16} color={colors.textMuted} style={styles.detailsIcon} />
-                          <Text style={styles.detailsText}>{item.phone}</Text>
-                        </View>
-                      ) : null}
-                      {item.email ? (
-                        <View style={styles.priestDetailsRow}>
-                          <Ionicons name="mail-outline" size={16} color={colors.textMuted} style={styles.detailsIcon} />
-                          <Text style={styles.detailsText}>{item.email}</Text>
-                        </View>
-                      ) : null}
-                    </View>
-                    {item.phone ? (
-                      <View style={styles.priestActionButtonsRow}>
-                        <TouchableOpacity
-                          style={styles.priestCallBtn}
-                          onPress={() => handlePhonePress(item.phone)}
-                          accessibilityLabel={`Call ${t(item.name)}`}
-                          accessibilityRole="button"
-                        >
-                          <Ionicons name="call-outline" size={18} color="#ffffff" style={{ marginRight: 6 }} />
-                          <Text style={styles.priestCallBtnText}>{t('button-call')}</Text>
-                        </TouchableOpacity>
-                      </View>
-                    ) : null}
-                  </View>
-                ))}
+              <View>
+                {renderClergySectionHeader('Parish Priests', 'വികാരിയും വൈദികരും')}
+                <View style={clergyGridStyle}>
+                  {parishPriests.map(renderUnifiedClergyCard)}
+                </View>
               </View>
             )}
 
             {visitingPriests.length > 0 && (
-              <View style={styles.listSection}>
-                <Text style={styles.subSectionHeader}>{t('visiting-priests-header')}</Text>
-                {visitingPriests.map((item) => (
-                  <View key={item.id} style={styles.priestCard}>
-                    <View style={styles.priestCardTopAccent} />
-                    <View style={styles.priestCardHeader}>
-                      <View style={styles.priestAvatarSquare}>
-                        <ClergyHeadshotImage
-                          uri={item.avatarUrl}
-                          style={{ width: '100%', height: '100%', borderRadius: 16 }}
-                          accessibilityLabel="Visiting Priest Avatar"
-                          fallback={<Text style={styles.priestAvatarText}>{item.avatar}</Text>}
-                        />
-                      </View>
-                      <View style={styles.priestHeaderInfo}>
-                        <Text style={styles.priestName}>{t(item.name).toUpperCase()}</Text>
-                        <View style={styles.roleBadge}>
-                          <Text style={styles.roleBadgeText}>{t(item.role)}</Text>
-                        </View>
-                      </View>
-                    </View>
-                    {item.phone ? (
-                      <View style={styles.priestActionButtonsRow}>
-                        <TouchableOpacity
-                          style={styles.priestCallBtn}
-                          onPress={() => handlePhonePress(item.phone)}
-                          accessibilityLabel={`Call ${t(item.name)}`}
-                          accessibilityRole="button"
-                        >
-                          <Ionicons name="call-outline" size={18} color="#ffffff" style={{ marginRight: 6 }} />
-                          <Text style={styles.priestCallBtnText}>{t('button-call')}</Text>
-                        </TouchableOpacity>
-                      </View>
-                    ) : null}
-                  </View>
-                ))}
+              <View>
+                {renderClergySectionHeader('Visiting Priests', 'അതിഥി വൈദികർ')}
+                <View style={clergyGridStyle}>
+                  {visitingPriests.map(renderUnifiedClergyCard)}
+                </View>
               </View>
             )}
 
             {religiousSisters.length > 0 && (
-              <View style={styles.listSection}>
-                <Text style={styles.subSectionHeader}>{t('religious-sisters-header')}</Text>
-                {religiousSisters.map((item) => (
-                  <View key={item.id} style={styles.sisterRowCard}>
-                    <View style={styles.sisterAvatarSquircle}>
-                      <ClergyHeadshotImage
-                        uri={item.avatarUrl}
-                        style={{ width: '100%', height: '100%', borderRadius: 14 }}
-                        accessibilityLabel="Sister Avatar"
-                        fallback={<Text style={styles.sisterAvatarText}>{item.avatar}</Text>}
-                      />
-                    </View>
-                    <View style={styles.sisterInfo}>
-                      <Text style={styles.sisterName}>{t(item.name)}</Text>
-                      <Text style={styles.sisterSub}>
-                        {t(item.role)}{item.address ? ` - ${t(item.address)}` : ''}
-                      </Text>
-                    </View>
-                    {item.phone ? (
-                      <TouchableOpacity
-                        style={styles.sisterCallBtn}
-                        onPress={() => handlePhonePress(item.phone)}
-                        accessibilityLabel={`Call ${t(item.name)}`}
-                        accessibilityRole="button"
-                      >
-                        <Ionicons name="call-outline" size={20} color={colors.darkGold} />
-                      </TouchableOpacity>
-                    ) : null}
-                  </View>
-                ))}
+              <View>
+                {renderClergySectionHeader('Religious Sisters', 'സന്യാസിനികൾ')}
+                <View style={clergyGridStyle}>
+                  {religiousSisters.map(renderUnifiedClergyCard)}
+                </View>
               </View>
             )}
 
@@ -2675,5 +2634,203 @@ const getStyles = (colors: any, isDark: boolean) => StyleSheet.create({
     ...Platform.select({
       web: { cursor: 'pointer' }
     })
+  },
+  clergySectionHeaderBlock: {
+    marginTop: 28,
+    marginBottom: 16,
+  },
+  clergySectionTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  clergySectionTitleEn: {
+    fontSize: 18,
+    fontWeight: '700',
+    fontFamily: Platform.OS === 'web' ? 'Cinzel, serif' : 'System',
+    color: colors.foreground,
+    letterSpacing: 0.4,
+  },
+  clergySectionSubtitleMl: {
+    fontSize: 13.5,
+    fontWeight: '600',
+    fontFamily: Platform.OS === 'web' ? '"Noto Serif Malayalam", serif' : 'NotoSerifMalayalam-Regular',
+    color: isDark ? '#F4C430' : '#92400e',
+  },
+  clergySectionDividerTrack: {
+    height: 1.5,
+    backgroundColor: isDark ? 'rgba(244, 196, 48, 0.22)' : 'rgba(120, 53, 15, 0.14)',
+    marginTop: 8,
+    borderRadius: 2,
+    overflow: 'hidden',
+  },
+  clergySectionDividerAccent: {
+    width: 52,
+    height: '100%',
+    backgroundColor: '#C59B27',
+  },
+  unifiedClergyCard: {
+    backgroundColor: isDark ? colors.card : 'rgba(255, 255, 255, 0.85)',
+    borderWidth: 1,
+    borderColor: isDark ? colors.border : 'rgba(120, 53, 15, 0.12)',
+    borderRadius: 16,
+    padding: 20,
+    minHeight: 220,
+    justifyContent: 'space-between',
+    ...Platform.select({
+      ios: {
+        shadowColor: '#3d2b1f',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.06,
+        shadowRadius: 8,
+      },
+      android: {
+        elevation: 2,
+      },
+      web: {
+        boxShadow: '0 2px 10px rgba(61, 43, 31, 0.05)',
+        backdropFilter: 'blur(8px)',
+        transition: 'box-shadow 150ms ease, transform 150ms ease',
+      },
+    }),
+  },
+  unifiedClergyCardVicar: {
+    borderColor: isDark ? 'rgba(244, 196, 48, 0.5)' : 'rgba(197, 155, 39, 0.45)',
+    borderWidth: 1.5,
+    ...Platform.select({
+      web: {
+        boxShadow: '0 0 0 2px rgba(197, 155, 39, 0.18), 0 4px 12px rgba(61, 43, 31, 0.08)',
+      },
+    }),
+  },
+  unifiedCardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  unifiedAvatarCircle: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: isDark ? '#2a2416' : '#fef3c7',
+    borderWidth: 1.5,
+    borderColor: isDark ? 'rgba(244, 196, 48, 0.4)' : 'rgba(245, 158, 11, 0.4)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    overflow: 'hidden',
+    flexShrink: 0,
+  },
+  unifiedAvatarInitials: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: isDark ? '#F4C430' : '#78350f',
+  },
+  unifiedIdentityCol: {
+    flex: 1,
+    marginLeft: 14,
+  },
+  unifiedClergyName: {
+    fontSize: 15,
+    fontWeight: '600',
+    letterSpacing: 0.3,
+    fontFamily: Platform.OS === 'web' ? 'Cinzel, serif' : 'System',
+    color: isDark ? colors.foreground : '#1c1917',
+    lineHeight: 20,
+  },
+  unifiedRoleBadge: {
+    alignSelf: 'flex-start',
+    borderRadius: 999,
+    borderWidth: 1,
+    paddingHorizontal: 10,
+    paddingVertical: 2.5,
+    marginTop: 5,
+  },
+  unifiedRoleBadgeVicar: {
+    backgroundColor: isDark ? 'rgba(244, 196, 48, 0.18)' : '#fef3c7',
+    borderColor: isDark ? '#F4C430' : '#fcd34d',
+  },
+  unifiedRoleBadgeNeutral: {
+    backgroundColor: isDark ? '#252525' : '#f5f5f4',
+    borderColor: isDark ? '#3a3a3a' : '#e7e5e4',
+  },
+  unifiedRoleBadgeText: {
+    fontSize: 11,
+  },
+  unifiedRoleBadgeTextVicar: {
+    fontWeight: '600',
+    color: isDark ? '#F4C430' : '#78350f',
+  },
+  unifiedRoleBadgeTextNeutral: {
+    fontWeight: '500',
+    color: isDark ? '#d6d3d1' : '#44403c',
+  },
+  unifiedMiddleStack: {
+    marginTop: 14,
+  },
+  unifiedPhoneBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: isDark ? 'rgba(255, 255, 255, 0.04)' : 'rgba(255, 251, 235, 0.65)',
+    borderColor: isDark ? 'rgba(255, 255, 255, 0.06)' : 'rgba(120, 53, 15, 0.07)',
+    borderWidth: 1,
+    borderRadius: 10,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+  },
+  unifiedPhoneText: {
+    fontSize: 12,
+    fontWeight: '500',
+    color: isDark ? colors.foreground : '#44403c',
+    flex: 1,
+  },
+  unifiedEmailRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: 7,
+    paddingHorizontal: 2,
+  },
+  unifiedEmailText: {
+    fontSize: 12,
+    color: isDark ? '#a8a29e' : '#57534e',
+    flex: 1,
+  },
+  unifiedActionDock: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 14,
+  },
+  unifiedCallBtn: {
+    flex: 1,
+    backgroundColor: '#C59B27',
+    borderRadius: 12,
+    paddingVertical: 9,
+    paddingHorizontal: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    ...Platform.select({
+      web: { cursor: 'pointer' },
+    }),
+  },
+  unifiedCallBtnText: {
+    color: '#ffffff',
+    fontSize: 12.5,
+    fontWeight: '600',
+  },
+  unifiedEmailIconBtn: {
+    padding: 9,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: isDark ? 'rgba(244, 196, 48, 0.25)' : 'rgba(120, 53, 15, 0.16)',
+    backgroundColor: isDark ? 'rgba(255, 255, 255, 0.03)' : '#ffffff',
+    alignItems: 'center',
+    justifyContent: 'center',
+    ...Platform.select({
+      web: { cursor: 'pointer' },
+    }),
   },
 });
