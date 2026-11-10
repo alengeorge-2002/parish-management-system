@@ -7,6 +7,7 @@ import fs from 'fs';
 import path from 'path';
 import { seedDefaultUsersAndDependencies } from './scripts/seed-default-users';
 import { ensureCouncilSeatsSeeded } from './controllers/parish-council-controller';
+import { ensureLiturgicalSchedulesSchema } from './controllers/calendar-controller';
 
 const port = process.env.PORT || 5000;
 
@@ -144,6 +145,9 @@ export const autoInitializeDb = async () => {
 
     // 7. Seed designated vacant Parish Council seats (12 executive + 1 per registered ward)
     await ensureCouncilSeatsSeeded(true);
+
+    // 8. Ensure liturgical_schedules schema exists
+    await ensureLiturgicalSchedulesSchema(true);
   } catch (err) {
     console.warn('Database auto-initialization notice:', err);
   }

@@ -134,17 +134,26 @@ export const normalizeReadings = (readingsRaw: any, readingsEnRaw?: any, reading
           description_ml: '',
         });
       } else if (r && typeof r === 'object') {
-        const citEn = r.citation_en || r.referenceEn || r.citation || r.ref || '';
-        const citMl = r.citation_ml || r.referenceMl || r.citation || r.ref || citEn;
-        const descEn = r.description_en || r.descriptionEn || r.description || '';
-        const descMl = r.description_ml || r.descriptionMl || r.description || descEn;
-        if (citEn || citMl) {
+        if (r.reading && r.citation) {
           result.push({
-            citation_en: citEn,
-            citation_ml: citMl,
-            description_en: descEn,
-            description_ml: descMl,
+            citation_en: r.reading,
+            citation_ml: r.reading,
+            description_en: r.citation,
+            description_ml: r.citation,
           });
+        } else {
+          const citEn = r.citation_en || r.referenceEn || r.citation || r.ref || '';
+          const citMl = r.citation_ml || r.referenceMl || r.citation || r.ref || citEn;
+          const descEn = r.description_en || r.descriptionEn || r.description || '';
+          const descMl = r.description_ml || r.descriptionMl || r.description || descEn;
+          if (citEn || citMl) {
+            result.push({
+              citation_en: citEn,
+              citation_ml: citMl,
+              description_en: descEn,
+              description_ml: descMl,
+            });
+          }
         }
       }
     });
@@ -257,32 +266,57 @@ export default function FeastCalendarScreen({ navigation }: any) {
       setFeasts([]);
     }
 
-    // 2. Fetch Liturgical Calendar / Readings API with fallback
+    // 2. Fetch Liturgical Calendar / Readings API (both legacy & dynamic liturgical_schedules)
     try {
-      const calResponse = await apiFetch(`${API_BASE_URL}/api/calendar`, {
-        method: 'GET',
-        headers: {
-          'Authorization': token ? `Bearer ${token}` : '',
-          'Content-Type': 'application/json'
-        }
-      });
+      const headers = {
+        'Authorization': token ? `Bearer ${token}` : '',
+        'Content-Type': 'application/json'
+      };
+      const [calResponse, monthResponse] = await Promise.all([
+        apiFetch(`${API_BASE_URL}/api/calendar`, { method: 'GET', headers }),
+        apiFetch(`${API_BASE_URL}/api/calendar/month?year=${currentYear}&month=${currentMonth + 1}`, { method: 'GET', headers }).catch(() => null),
+      ]);
+
+      const map: Record<string, any> = {};
 
       if (calResponse.ok) {
         const calData = await calResponse.json();
         const list = Array.isArray(calData) 
           ? calData 
           : (Array.isArray(calData?.days) ? calData.days : (Array.isArray(calData?.calendar) ? calData.calendar : []));
-        if (list.length > 0) {
-          const map: Record<string, any> = {};
-          list.forEach((item: any) => {
-            const dStr = item.dateString || item.date || item.target_date;
-            if (dStr) {
-              const norm = normalizeDateStr(dStr);
-              if (norm) map[norm] = item;
-            }
+        list.forEach((item: any) => {
+          const dStr = item.dateString || item.date || item.target_date;
+          if (dStr) {
+            const norm = normalizeDateStr(dStr);
+            if (norm) map[norm] = item;
+          }
+        });
+      }
+
+      if (monthResponse && monthResponse.ok) {
+        const mData = await monthResponse.json();
+        if (mData && Array.isArray(mData.schedules)) {
+          mData.schedules.forEach((s: any) => {
+            if (!s?.schedule_date) return;
+            const norm = normalizeDateStr(s.schedule_date);
+            if (!norm) return;
+            const isCustomFeast = s.feast_title && s.feast_title !== 'Ferial day — no major feast';
+            map[norm] = {
+              ...(map[norm] || {}),
+              ...s,
+              dateString: norm,
+              feastName: isCustomFeast ? s.feast_title : map[norm]?.feastName,
+              feastNameMl: s.feast_title_ml || map[norm]?.feastNameMl,
+              season: s.liturgical_season || map[norm]?.season,
+              readings: Array.isArray(s.scripture_readings) ? s.scripture_readings : (map[norm]?.readings || []),
+              mass_timings: Array.isArray(s.mass_timings) ? s.mass_timings : (map[norm]?.mass_timings || []),
+            };
           });
-          setCalendarDataMap(map);
         }
+      }
+
+      if (Object.keys(map).length > 0) {
+        setCalendarDataMap((prev) => ({ ...prev, ...map }));
       }
     } catch (calError) {
       console.warn('Calendar API unavailable, hydrating from local liturgical dataset.', calError);
@@ -294,7 +328,7 @@ export default function FeastCalendarScreen({ navigation }: any) {
 
   useEffect(() => {
     fetchFeasts();
-  }, []);
+  }, [currentYear, currentMonth]);
 
   const handleRefresh = () => {
     setRefreshing(true);
@@ -331,6 +365,8 @@ export default function FeastCalendarScreen({ navigation }: any) {
     
     const dayData = getDayLiturgicalData(dateStr);
     const hasDatasetFeast = dayData?.isHolyDayOfObligation || 
+      Boolean(dayData?.feastName) ||
+      (Array.isArray(dayData?.readings) && dayData.readings.length > 0) ||
       (dayData?.occasions && dayData.occasions.some((o: any) => 
         /feast|solemnity|commemoration|memorial|തിരുനാൾ/i.test(o.name_en || o.name_ml || '')
       ));
@@ -426,18 +462,22 @@ export default function FeastCalendarScreen({ navigation }: any) {
     // 5. Liturgical Calendar Occasions & Daily Scripture Readings
     const dayData = getDayLiturgicalData(dateStr);
     if (dayData) {
-      // Backend format (e.g. feastName, season, readings)
-      if (dayData.feastName || (dayData.readings && dayData.readings.length > 0)) {
+      // Backend format (e.g. feastName, season, readings, mass_timings)
+      const hasMassTimings = Array.isArray(dayData.mass_timings) && dayData.mass_timings.length > 0;
+      if (dayData.feastName || (dayData.readings && dayData.readings.length > 0) || hasMassTimings) {
         const backendReadings = normalizeReadings(dayData.readings);
-        const feastTitleEn = dayData.feastName || dayData.title || dayData.season || 'Daily Bible Readings';
-        const feastTitleMl = dayData.feastNameMl || dayData.titleMl || dayData.seasonMl || 'തിരുവചന വായനകൾ';
+        const feastTitleEn = dayData.feastName || dayData.title || dayData.season || 'Daily Parish Schedule';
+        const feastTitleMl = dayData.feastNameMl || dayData.titleMl || dayData.seasonMl || 'ഇടവക ദൈനംദിന ക്രമം';
+        const massSummary = hasMassTimings
+          ? dayData.mass_timings.map((m: any) => `${m.time} (${m.language})`).join(' • ')
+          : '';
         
         const alreadyHasFeast = combined.some(c => 
           c.title_en?.toLowerCase() === feastTitleEn.toLowerCase() ||
           c.title_ml?.toLowerCase() === feastTitleMl.toLowerCase()
         );
 
-        if (!alreadyHasFeast || backendReadings.length > 0) {
+        if (!alreadyHasFeast || backendReadings.length > 0 || hasMassTimings) {
           combined.push({
             id: `cal-backend-${dateStr}`,
             title_en: feastTitleEn,
@@ -447,7 +487,7 @@ export default function FeastCalendarScreen({ navigation }: any) {
               : (calLang === 'ml' ? 'തിരുനാൾ' : 'Liturgical'),
             isLiturgical: true,
             isReading: backendReadings.length > 0,
-            mass_time: dayData.season || (calLang === 'ml' ? 'ദൈനംദിന വായന' : 'Liturgy of the Word'),
+            mass_time: massSummary || dayData.season || (calLang === 'ml' ? 'ദൈനംദിന വായന' : 'Liturgy of the Word'),
             location: '',
             event_date: dateStr,
             description_en: dayData.season ? `Season: ${dayData.season}` : 'Daily Liturgical Scripture',

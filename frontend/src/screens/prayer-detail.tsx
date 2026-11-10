@@ -8,6 +8,7 @@ import { useTheme } from '../styles/theme-context';
 import { prayersData } from '../data/prayers-data';
 import * as SecureStore from 'expo-secure-store';
 import dailyReadingsData from '../data/daily-readings.json';
+import { API_BASE_URL, apiFetch } from '../config';
 
 const dailyReadings = dailyReadingsData as Record<string, any>;
 
@@ -21,9 +22,37 @@ export default function PrayerDetailScreen() {
   
   // Custom states for daily bible readings
   const today = new Date();
-  const initialDateStr = `2026-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+  const initialDateStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
   const [activeDateStr, setActiveDateStr] = useState(initialDateStr);
   const [calLang, setCalLang] = useState<'en' | 'ml'>('en');
+  const [dbDaySchedule, setDbDaySchedule] = useState<{
+    feast_title?: string;
+    feast_title_ml?: string;
+    liturgical_season?: string;
+    scripture_readings?: { reading: string; citation: string }[];
+  } | null>(null);
+
+  useEffect(() => {
+    if (slug !== 'bible-readings') return;
+    let active = true;
+    const loadDbDay = async () => {
+      try {
+        const res = await apiFetch(`${API_BASE_URL}/api/calendar/day?date=${activeDateStr}`);
+        if (res.ok && active) {
+          const data = await res.json();
+          setDbDaySchedule(data);
+        } else if (active) {
+          setDbDaySchedule(null);
+        }
+      } catch {
+        if (active) setDbDaySchedule(null);
+      }
+    };
+    loadDbDay();
+    return () => {
+      active = false;
+    };
+  }, [slug, activeDateStr]);
 
   useEffect(() => {
     const initCalLang = async () => {
@@ -54,7 +83,7 @@ export default function PrayerDetailScreen() {
       const parts = activeDateStr.split('-');
       const current = new Date(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1, parseInt(parts[2], 10));
       current.setDate(current.getDate() - 1);
-      const newDateStr = `2026-${String(current.getMonth() + 1).padStart(2, '0')}-${String(current.getDate()).padStart(2, '0')}`;
+      const newDateStr = `${current.getFullYear()}-${String(current.getMonth() + 1).padStart(2, '0')}-${String(current.getDate()).padStart(2, '0')}`;
       setActiveDateStr(newDateStr);
     } catch (_) {}
   };
@@ -64,7 +93,7 @@ export default function PrayerDetailScreen() {
       const parts = activeDateStr.split('-');
       const current = new Date(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1, parseInt(parts[2], 10));
       current.setDate(current.getDate() + 1);
-      const newDateStr = `2026-${String(current.getMonth() + 1).padStart(2, '0')}-${String(current.getDate()).padStart(2, '0')}`;
+      const newDateStr = `${current.getFullYear()}-${String(current.getMonth() + 1).padStart(2, '0')}-${String(current.getDate()).padStart(2, '0')}`;
       setActiveDateStr(newDateStr);
     } catch (_) {}
   };
@@ -86,10 +115,23 @@ export default function PrayerDetailScreen() {
     }
   };
 
-  // If slug is bible-readings, render dynamic PDF readings view
+  // If slug is bible-readings, render dynamic PDF + Admin DB readings view
   if (slug === 'bible-readings') {
     const dayData = dailyReadings[activeDateStr];
-    const hasData = dayData && dayData.occasions && dayData.occasions.length > 0;
+    const hasLocalData = dayData && dayData.occasions && dayData.occasions.length > 0;
+    const dbReadings = Array.isArray(dbDaySchedule?.scripture_readings)
+      ? dbDaySchedule.scripture_readings
+      : [];
+    const hasDbReadings = dbReadings.length > 0;
+    const hasData = hasLocalData || hasDbReadings;
+    const dbFeastTitle =
+      calLang === 'ml' && dbDaySchedule?.feast_title_ml
+        ? dbDaySchedule.feast_title_ml
+        : dbDaySchedule?.feast_title && dbDaySchedule.feast_title !== 'Ferial day — no major feast'
+          ? dbDaySchedule.feast_title
+          : calLang === 'ml'
+            ? 'തിരുവചന വായനകൾ'
+            : 'Parish Scripture Readings';
     
     return (
       <SafeAreaView style={styles.safeArea}>
@@ -141,7 +183,24 @@ export default function PrayerDetailScreen() {
 
         {/* Readings Scroll View */}
         <ScrollView contentContainerStyle={styles.scrollContainer} showsVerticalScrollIndicator={false}>
-          {hasData ? (
+          {hasDbReadings && (
+            <View style={[globalStyles.card, styles.readingCard, { marginBottom: 20 }]}>
+              <Text style={styles.occasionTitle}>{dbFeastTitle}</Text>
+              <View style={styles.occasionDivider} />
+              {dbReadings.map((reading, rIdx) => (
+                <View key={`db-reading-${rIdx}`} style={styles.readingBlock}>
+                  <View style={styles.citationRow}>
+                    <Ionicons name="book-outline" size={18} color={colors.darkGold} style={{ marginRight: 8 }} />
+                    <Text style={styles.readingCitation}>
+                      {reading.reading}: {reading.citation}
+                    </Text>
+                  </View>
+                </View>
+              ))}
+            </View>
+          )}
+
+          {hasLocalData ? (
             dayData.occasions.map((occ: any, occIdx: number) => {
               const occasionName = calLang === 'ml' ? occ.name_ml : occ.name_en;
               const hasReadings = occ.readings && occ.readings.length > 0;
@@ -174,14 +233,14 @@ export default function PrayerDetailScreen() {
                 </View>
               );
             })
-          ) : (
+          ) : !hasData ? (
             <View style={[globalStyles.card, styles.readingCard, { alignItems: 'center', paddingVertical: 40 }]}>
               <Ionicons name="calendar-outline" size={40} color={colors.mediumBrown} style={{ marginBottom: 12 }} />
               <Text style={styles.noReadingsText}>
                 {calLang === 'ml' ? 'ഈ ദിവസത്തേക്ക് തിരുവചന വായനകൾ ലഭ്യമല്ല.' : 'No scripture readings registered for this date.'}
               </Text>
             </View>
-          )}
+          ) : null}
         </ScrollView>
       </SafeAreaView>
     );

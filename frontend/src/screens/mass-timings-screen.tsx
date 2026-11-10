@@ -1,15 +1,69 @@
-import React from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { View, Text, TouchableOpacity, ScrollView, StyleSheet, Platform } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { globalStyles } from '../styles/accessible-theme';
 import { useTheme } from '../styles/theme-context';
 import { useLanguage } from '../localization/language-context';
 import { Ionicons } from '@expo/vector-icons';
+import { API_BASE_URL, apiFetch } from '../config';
+
+interface MassTimingItem {
+  id: string;
+  time: string;
+  language: string;
+  celebrant: string;
+  notes?: string;
+}
+
+const DEFAULT_TODAY_MASSES: MassTimingItem[] = [
+  { id: 'm1', time: '06:30 AM', language: 'Malayalam', celebrant: 'Parish Priest', notes: '' },
+  { id: 'm2', time: '06:00 PM', language: 'Malayalam', celebrant: 'Parish Priest', notes: '' },
+];
+
+const getLocalDateStr = (d = new Date()): string => {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+};
 
 export default function MassTimingsScreen({ navigation }: any) {
   const { colors, isDark } = useTheme();
   const styles = getStyles(colors, isDark);
-  const { t } = useLanguage();
+  const { t, language: lang } = useLanguage();
+  const [todayMasses, setTodayMasses] = useState<MassTimingItem[]>(DEFAULT_TODAY_MASSES);
+  const [todayFeast, setTodayFeast] = useState<string>('');
+  const [todaySeason, setTodaySeason] = useState<string>('Ordinary');
+
+  const fetchTodaySchedule = useCallback(async () => {
+    try {
+      const todayStr = getLocalDateStr();
+      const res = await apiFetch(`${API_BASE_URL}/api/calendar/day?date=${todayStr}`);
+      if (res.ok) {
+        const data = await res.json();
+        if (Array.isArray(data.mass_timings)) {
+          setTodayMasses(data.mass_timings);
+        }
+        const fTitle = lang === 'ml' && data.feast_title_ml ? data.feast_title_ml : data.feast_title;
+        if (fTitle && fTitle !== 'Ferial day — no major feast') {
+          setTodayFeast(fTitle);
+        } else {
+          setTodayFeast('');
+        }
+        setTodaySeason(data.liturgical_season || 'Ordinary');
+      }
+    } catch (e) {
+      console.warn('Failed to fetch today mass timings, keeping defaults:', e);
+    }
+  }, [lang]);
+
+  useEffect(() => {
+    fetchTodaySchedule();
+    const unsub = navigation?.addListener?.('focus', () => {
+      fetchTodaySchedule();
+    });
+    return unsub;
+  }, [fetchTodaySchedule, navigation]);
 
   const sundaySchedules = [
     t('sun-slot-1'),
@@ -50,6 +104,43 @@ export default function MassTimingsScreen({ navigation }: any) {
           <Text style={styles.siennaSubtext}>{t('holy-mass-schedule')}</Text>
           <View style={styles.goldLine} />
         </View>
+      </View>
+
+      {/* Dynamic Today's Mass Schedule */}
+      <Text style={styles.sectionHeader}>
+        {lang === 'ml' ? 'ഇന്നത്തെ കുർബാന ക്രമം' : "TODAY'S LIVE SCHEDULE"}
+        {todayFeast ? ` • ${todayFeast.toUpperCase()}` : ` (${todaySeason.toUpperCase()})`}
+      </Text>
+      <View style={styles.listContainer}>
+        {todayMasses.length > 0 ? (
+          todayMasses.map((m, index) => {
+            const cardBg = isDark
+              ? (index % 2 === 0 ? colors.card : '#252525')
+              : (index % 2 === 0 ? '#ffffff' : '#fffdf4');
+            return (
+              <View
+                key={m.id || `${m.time}-${index}`}
+                style={[styles.scheduleCard, { backgroundColor: cardBg }]}
+              >
+                <View style={styles.iconBox}>
+                  <Ionicons name="sunny-outline" size={22} color={colors.primary} />
+                </View>
+                <Text style={styles.scheduleText}>
+                  {`${m.time} — ${m.language} (${m.celebrant || 'Parish Priest'})${m.notes ? ` • ${m.notes}` : ''}`}
+                </Text>
+              </View>
+            );
+          })
+        ) : (
+          <View style={[styles.scheduleCard, { backgroundColor: isDark ? colors.card : '#ffffff' }]}>
+            <View style={styles.iconBox}>
+              <Ionicons name="time-outline" size={22} color={colors.primary} />
+            </View>
+            <Text style={styles.scheduleText}>
+              {lang === 'ml' ? 'ഇന്ന് പ്രത്യേക കുർബാന സമയങ്ങളില്ല.' : 'No custom Masses scheduled for today.'}
+            </Text>
+          </View>
+        )}
       </View>
 
       {/* 6. Sunday Mass Section Header (small-caps muted sienna) */}

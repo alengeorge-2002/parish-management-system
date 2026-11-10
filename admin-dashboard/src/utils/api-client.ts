@@ -341,9 +341,43 @@ export const eventsApi = {
   }),
 };
 
+export interface MassTimingItem {
+  id: string;
+  time: string;
+  language: string;
+  celebrant: string;
+  notes?: string;
+}
+
+export interface ScriptureReadingItem {
+  reading: string;
+  citation: string;
+}
+
+export interface DayScheduleData {
+  id?: number;
+  schedule_date: string;
+  feast_title: string;
+  feast_title_ml?: string;
+  liturgical_season: string;
+  mass_timings: MassTimingItem[];
+  scripture_readings: ScriptureReadingItem[];
+  is_default?: boolean;
+  updated_at?: string;
+}
+
 export const calendarApi = {
   list: () => fetchApi('/calendar'),
   getByDate: (dateString: string) => fetchApi(`/calendar/${dateString}`),
+  getDay: (dateString: string): Promise<DayScheduleData> =>
+    fetchApi(`/calendar/day?date=${encodeURIComponent(dateString)}`),
+  getMonth: (year: number, month: number): Promise<{ year: number; month: number; schedules: DayScheduleData[] }> =>
+    fetchApi(`/calendar/month?year=${year}&month=${month}`),
+  upsertDay: (data: Partial<DayScheduleData> & { schedule_date: string }): Promise<DayScheduleData> =>
+    fetchApi('/calendar/day', {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    }),
 };
 
 export const ministriesApi = {
