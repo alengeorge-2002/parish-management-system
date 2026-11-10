@@ -26,7 +26,7 @@ import {
   updateMember,
   deleteMember,
 } from '../controllers/admin-controller';
-import { getClergy } from '../controllers/clergy-controller';
+import { getClergy, getLeadershipStatus } from '../controllers/clergy-controller';
 import { createClergy, updateClergy, deleteClergy } from '../controllers/admin-clergy-controller';
 import { getAllReligiousHouses } from '../controllers/religious-house-controller';
 import { getMinistriesDirectory } from '../controllers/ministry-controller';
@@ -81,6 +81,7 @@ router.put('/members/:id', updateMember);
 router.delete('/members/:id', deleteMember);
 
 // Direct public directory endpoints
+router.get('/clergy/leadership-status', getLeadershipStatus);
 router.get('/clergy', getClergy);
 router.post('/clergy', handleDirectClergyUpload, createClergy);
 router.put('/clergy/:id', handleDirectClergyUpload, updateClergy);

@@ -126,7 +126,7 @@ export default function MassTimingsScreen({ navigation }: any) {
                   <Ionicons name="sunny-outline" size={22} color={colors.primary} />
                 </View>
                 <Text style={styles.scheduleText}>
-                  {`${m.time} — ${m.language} (${m.celebrant || 'Parish Priest'})${m.notes ? ` • ${m.notes}` : ''}`}
+                  {`${m.time} — ${m.language} (${(m.celebrant || 'Parish Priest').replace(/\bAssociate Pastor\b/gi, 'Assistant Vicar').replace(/\bSenior Pastor\b/gi, 'Vicar')})${m.notes ? ` • ${m.notes}` : ''}`}
                 </Text>
               </View>
             );

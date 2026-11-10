@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { search, getDirectory, getDirectorySummary } from '../controllers/directory-controller';
 import { getFamilies, getAllWards } from '../controllers/admin-controller';
-import { getClergy } from '../controllers/clergy-controller';
+import { getClergy, getLeadershipStatus } from '../controllers/clergy-controller';
 import { getAllReligiousHouses } from '../controllers/religious-house-controller';
 import { getMinistriesDirectory } from '../controllers/ministry-controller';
 import { getAllSeatsAdmin, getQuickContacts } from '../controllers/parish-council-controller';
@@ -17,6 +17,7 @@ router.get('/', getDirectory);
 router.get('/search', search);
 router.get('/families', getFamilies);
 router.get('/wards', getAllWards);
+router.get('/clergy/leadership-status', getLeadershipStatus);
 router.get('/clergy', getClergy);
 router.get('/religious-houses', getAllReligiousHouses);
 router.get('/ministries', getMinistriesDirectory);

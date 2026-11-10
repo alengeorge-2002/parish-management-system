@@ -25,6 +25,61 @@ const DEFAULT_FALLBACK_CONTACTS = [
   { role: 'Parish Secretary', role_title: 'Parish Secretary', name: 'Adv. Mary Antony', phone: '+91 94471 00003', phone_number: '+91 94471 00003' },
 ];
 
+const sanitizeClergyTitle = (val?: string | null): string => {
+  if (!val) return '';
+  return String(val)
+    .replace(/\bAssociate Pastor\b/gi, 'Assistant Vicar')
+    .replace(/\bSenior Pastor\b/gi, 'Vicar')
+    .replace(/\bPastor\b/gi, 'Priest');
+};
+
+const isAsstVicarClergy = (roleType?: string, designation?: string): boolean => {
+  const combined = `${roleType || ''} ${designation || ''}`.toLowerCase();
+  return (
+    combined.includes('assistant') ||
+    combined.includes('asst') ||
+    combined.includes('associate') ||
+    combined.includes('സഹവികാരി')
+  );
+};
+
+const isVicarClergy = (roleType?: string, designation?: string): boolean => {
+  if (isAsstVicarClergy(roleType, designation)) return false;
+  const role = (roleType || '').trim().toLowerCase();
+  const desig = (designation || '').trim().toLowerCase();
+  if (role.includes('sister') || desig.includes('sister') || desig.includes('principal') || desig.includes('social service')) {
+    return false;
+  }
+  if (role.includes('visiting') || desig.includes('visiting')) return false;
+  if (role === 'resident priest' || role === 'priest') {
+    return desig.includes('vicar') || desig.includes('വികാരി');
+  }
+  return role === 'vicar' || desig.includes('vicar') || desig.includes('വികാരി') || role === 'parish-priest';
+};
+
+const classifyClergyGroup = (roleType?: string, designation?: string): 'parish-priests' | 'visiting-priests' | 'religious-sisters' => {
+  const combined = `${roleType || ''} ${designation || ''}`.toLowerCase();
+  if (combined.includes('visiting')) return 'visiting-priests';
+  if (
+    combined.includes('sister') ||
+    combined.includes('principal') ||
+    combined.includes('social service') ||
+    combined.includes('സന്യാസിനി')
+  ) {
+    return 'religious-sisters';
+  }
+  return 'parish-priests';
+};
+
+const getClergySortRank = (roleType?: string, designation?: string): number => {
+  if (isVicarClergy(roleType, designation)) return 0;
+  if (isAsstVicarClergy(roleType, designation)) return 1;
+  const group = classifyClergyGroup(roleType, designation);
+  if (group === 'parish-priests') return 2;
+  if (group === 'visiting-priests') return 3;
+  return 4;
+};
+
 function ClergyHeadshotImage({
   uri,
   style,
@@ -145,22 +200,34 @@ export default function DirectoryScreen() {
         if (clergyRes.ok) {
           const rawClergyList = await clergyRes.json();
           const clergyList = Array.isArray(rawClergyList) ? rawClergyList : [];
-          const mappedClergy = clergyList.map((item: any) => ({
-            id: item.id,
-            name: item.name,
-            role: item.designation || '',
-            role_type: item.role_type,
-            group: item.role_type === 'parish-priest' ? 'parish-priests' : 'religious-sisters',
-            phone: item.phone_number || '',
-            email: item.email || '',
-            avatar: getInitials(item.name),
-            avatarUrl: item.avatar_url && item.avatar_url.startsWith('/uploads') 
-              ? `${API_BASE_URL}${item.avatar_url}` 
-              : (item.avatar_url || ''),
-            address: item.address || '',
-            bloodGroup: item.blood_group || '',
-            house_id: item.house_id
-          }));
+          const mappedClergy = clergyList
+            .map((item: any) => {
+              const cleanDesignation = sanitizeClergyTitle(item.designation || item.title || item.role_type || '');
+              const cleanRoleType = sanitizeClergyTitle(item.role_type || item.role || '');
+              const isVicar = isVicarClergy(cleanRoleType, cleanDesignation);
+              const isAssistantVicar = isAsstVicarClergy(cleanRoleType, cleanDesignation);
+              return {
+                id: item.id,
+                name: item.name,
+                role: cleanDesignation || cleanRoleType,
+                role_type: cleanRoleType,
+                isVicar,
+                isAssistantVicar,
+                rank: getClergySortRank(cleanRoleType, cleanDesignation),
+                group: classifyClergyGroup(cleanRoleType, cleanDesignation),
+                phone: item.phone_number || '',
+                email: item.email || '',
+                avatar: getInitials(item.name),
+                avatarUrl:
+                  item.avatar_url && item.avatar_url.startsWith('/uploads')
+                    ? `${API_BASE_URL}${item.avatar_url}`
+                    : item.avatar_url || '',
+                address: item.address || '',
+                bloodGroup: item.blood_group || '',
+                house_id: item.house_id,
+              };
+            })
+            .sort((a: any, b: any) => a.rank - b.rank);
           setClergyData(mappedClergy);
         }
 
@@ -181,7 +248,26 @@ export default function DirectoryScreen() {
 
         if (quickContactsRes && quickContactsRes.ok) {
           const contactsList = await quickContactsRes.json();
-          setQuickContacts(Array.isArray(contactsList) && contactsList.length > 0 ? contactsList : DEFAULT_FALLBACK_CONTACTS);
+          if (Array.isArray(contactsList) && contactsList.length > 0) {
+            const sanitizedContacts = contactsList
+              .map((c: any) => ({
+                ...c,
+                role: sanitizeClergyTitle(c.role || c.role_title || ''),
+                role_title: sanitizeClergyTitle(c.role_title || c.role || ''),
+              }))
+              .sort((a: any, b: any) => {
+                const rankFor = (r: string) => {
+                  const low = r.toLowerCase();
+                  if (low.includes('vicar') && !low.includes('assistant') && !low.includes('asst')) return 0;
+                  if (low.includes('assistant') || low.includes('asst')) return 1;
+                  return 2;
+                };
+                return rankFor(a.role_title) - rankFor(b.role_title);
+              });
+            setQuickContacts(sanitizedContacts);
+          } else {
+            setQuickContacts(DEFAULT_FALLBACK_CONTACTS);
+          }
         }
 
         if (membersRes && membersRes.ok) {
@@ -588,6 +674,27 @@ export default function DirectoryScreen() {
           </View>
           <View style={styles.goldLine} />
         </View>
+      ) : activeCategory === 'priests' ? (
+        <View style={styles.header}>
+          <View style={styles.subViewHeaderRow}>
+            <TouchableOpacity 
+              style={styles.headerBackButton} 
+              onPress={() => {
+                setSelectedProfile(null);
+                setActiveCategory(null);
+              }}
+              accessibilityLabel="Go back"
+              accessibilityRole="button"
+            >
+              <Ionicons name="chevron-back" size={28} color={colors.foreground} />
+            </TouchableOpacity>
+            <View style={styles.headerTitleContainer}>
+              <Text style={styles.subViewTitle}>{t('priests-and-religious')}</Text>
+              <Text style={styles.siennaSubtext}>{t('parish-clergy-subtext')}</Text>
+            </View>
+          </View>
+          <View style={styles.goldLine} />
+        </View>
       ) : (
         <View style={styles.header}>
           <Text style={styles.mainTitle}>{t('parish-directory')}</Text>
@@ -884,7 +991,13 @@ export default function DirectoryScreen() {
                               <View style={styles.priestHeaderInfo}>
                                 <Text style={styles.priestName}>{t(item.name).toUpperCase()}</Text>
                                 <View style={styles.roleBadge}>
-                                  <Text style={styles.roleBadgeText}>{t(item.role)}</Text>
+                                  <Text style={styles.roleBadgeText}>
+                                    {item.isVicar
+                                      ? 'HEAD OF PARISH / വികാരി'
+                                      : item.isAssistantVicar
+                                        ? 'ASSISTANT VICAR / സഹവികാരി'
+                                        : t(item.role)}
+                                  </Text>
                                 </View>
                               </View>
                             </View>
@@ -1028,6 +1141,175 @@ export default function DirectoryScreen() {
                   </View>
                 );
               })()
+            )}
+          </View>
+        ) : activeCategory === 'priests' ? (
+          // PRIESTS & RELIGIOUS SUB-VIEW (Vicar Head of Parish displayed prominently at the top)
+          <View>
+            <TextInput
+              style={[globalStyles.input, styles.oversizedSearchBar]}
+              placeholder={isMl ? 'വൈദികരെ തിരയുക...' : 'Search priests or sisters...'}
+              placeholderTextColor="#9e7a60"
+              value={priestSearch}
+              onChangeText={setPriestSearch}
+              accessibilityLabel="Search Priests and Religious"
+            />
+
+            {parishPriests.length > 0 && (
+              <View style={styles.listSection}>
+                <Text style={styles.subSectionHeader}>{t('parish-priests-header')}</Text>
+                {parishPriests.map((item) => (
+                  <View
+                    key={item.id}
+                    style={[
+                      styles.priestCard,
+                      item.isVicar && { borderColor: '#c9a84c', borderWidth: 2 },
+                    ]}
+                  >
+                    <View style={styles.priestCardTopAccent} />
+                    <View style={styles.priestCardHeader}>
+                      <View style={styles.priestAvatarSquare}>
+                        <ClergyHeadshotImage
+                          uri={item.avatarUrl}
+                          style={{ width: '100%', height: '100%', borderRadius: 16 }}
+                          accessibilityLabel="Priest Avatar"
+                          fallback={<Text style={styles.priestAvatarText}>{item.avatar}</Text>}
+                        />
+                      </View>
+                      <View style={styles.priestHeaderInfo}>
+                        <Text style={styles.priestName}>{t(item.name).toUpperCase()}</Text>
+                        <View
+                          style={[
+                            styles.roleBadge,
+                            item.isVicar && {
+                              backgroundColor: isDark ? 'rgba(201, 168, 76, 0.2)' : '#fef3c7',
+                              borderColor: '#c9a84c',
+                            },
+                          ]}
+                        >
+                          <Text
+                            style={[
+                              styles.roleBadgeText,
+                              item.isVicar && { color: isDark ? '#F4C430' : '#92400e' },
+                            ]}
+                          >
+                            {item.isVicar
+                              ? 'HEAD OF PARISH / വികാരി'
+                              : item.isAssistantVicar
+                                ? 'ASSISTANT VICAR / സഹവികാരി'
+                                : t(item.role)}
+                          </Text>
+                        </View>
+                      </View>
+                    </View>
+                    <View style={styles.priestDetailsContainer}>
+                      {item.phone ? (
+                        <View style={styles.priestDetailsRow}>
+                          <Ionicons name="call-outline" size={16} color={colors.textMuted} style={styles.detailsIcon} />
+                          <Text style={styles.detailsText}>{item.phone}</Text>
+                        </View>
+                      ) : null}
+                      {item.email ? (
+                        <View style={styles.priestDetailsRow}>
+                          <Ionicons name="mail-outline" size={16} color={colors.textMuted} style={styles.detailsIcon} />
+                          <Text style={styles.detailsText}>{item.email}</Text>
+                        </View>
+                      ) : null}
+                    </View>
+                    {item.phone ? (
+                      <View style={styles.priestActionButtonsRow}>
+                        <TouchableOpacity
+                          style={styles.priestCallBtn}
+                          onPress={() => handlePhonePress(item.phone)}
+                          accessibilityLabel={`Call ${t(item.name)}`}
+                          accessibilityRole="button"
+                        >
+                          <Ionicons name="call-outline" size={18} color="#ffffff" style={{ marginRight: 6 }} />
+                          <Text style={styles.priestCallBtnText}>{t('button-call')}</Text>
+                        </TouchableOpacity>
+                      </View>
+                    ) : null}
+                  </View>
+                ))}
+              </View>
+            )}
+
+            {visitingPriests.length > 0 && (
+              <View style={styles.listSection}>
+                <Text style={styles.subSectionHeader}>{t('visiting-priests-header')}</Text>
+                {visitingPriests.map((item) => (
+                  <View key={item.id} style={styles.priestCard}>
+                    <View style={styles.priestCardTopAccent} />
+                    <View style={styles.priestCardHeader}>
+                      <View style={styles.priestAvatarSquare}>
+                        <ClergyHeadshotImage
+                          uri={item.avatarUrl}
+                          style={{ width: '100%', height: '100%', borderRadius: 16 }}
+                          accessibilityLabel="Visiting Priest Avatar"
+                          fallback={<Text style={styles.priestAvatarText}>{item.avatar}</Text>}
+                        />
+                      </View>
+                      <View style={styles.priestHeaderInfo}>
+                        <Text style={styles.priestName}>{t(item.name).toUpperCase()}</Text>
+                        <View style={styles.roleBadge}>
+                          <Text style={styles.roleBadgeText}>{t(item.role)}</Text>
+                        </View>
+                      </View>
+                    </View>
+                    {item.phone ? (
+                      <View style={styles.priestActionButtonsRow}>
+                        <TouchableOpacity
+                          style={styles.priestCallBtn}
+                          onPress={() => handlePhonePress(item.phone)}
+                          accessibilityLabel={`Call ${t(item.name)}`}
+                          accessibilityRole="button"
+                        >
+                          <Ionicons name="call-outline" size={18} color="#ffffff" style={{ marginRight: 6 }} />
+                          <Text style={styles.priestCallBtnText}>{t('button-call')}</Text>
+                        </TouchableOpacity>
+                      </View>
+                    ) : null}
+                  </View>
+                ))}
+              </View>
+            )}
+
+            {religiousSisters.length > 0 && (
+              <View style={styles.listSection}>
+                <Text style={styles.subSectionHeader}>{t('religious-sisters-header')}</Text>
+                {religiousSisters.map((item) => (
+                  <View key={item.id} style={styles.sisterRowCard}>
+                    <View style={styles.sisterAvatarSquircle}>
+                      <ClergyHeadshotImage
+                        uri={item.avatarUrl}
+                        style={{ width: '100%', height: '100%', borderRadius: 14 }}
+                        accessibilityLabel="Sister Avatar"
+                        fallback={<Text style={styles.sisterAvatarText}>{item.avatar}</Text>}
+                      />
+                    </View>
+                    <View style={styles.sisterInfo}>
+                      <Text style={styles.sisterName}>{t(item.name)}</Text>
+                      <Text style={styles.sisterSub}>
+                        {t(item.role)}{item.address ? ` - ${t(item.address)}` : ''}
+                      </Text>
+                    </View>
+                    {item.phone ? (
+                      <TouchableOpacity
+                        style={styles.sisterCallBtn}
+                        onPress={() => handlePhonePress(item.phone)}
+                        accessibilityLabel={`Call ${t(item.name)}`}
+                        accessibilityRole="button"
+                      >
+                        <Ionicons name="call-outline" size={20} color={colors.darkGold} />
+                      </TouchableOpacity>
+                    ) : null}
+                  </View>
+                ))}
+              </View>
+            )}
+
+            {parishPriests.length === 0 && visitingPriests.length === 0 && religiousSisters.length === 0 && (
+              <Text style={styles.noResults}>{t('no-directory-records')}</Text>
             )}
           </View>
         ) : activeCategory === 'ward' ? (
@@ -1207,6 +1489,13 @@ export default function DirectoryScreen() {
                     <View style={styles['box-grid-container']}>
                       {[
                         { 
+                          id: 'priests', 
+                          title: t('priests-and-religious'), 
+                          subtext: clergySubtext, 
+                          icon: 'person-outline',
+                          iconType: 'ionicons' 
+                        },
+                        { 
                           id: 'st-josephs-monastery', 
                           title: t('st-josephs-monastery'), 
                           subtext: `${monasteryCount} ${monasteryCount === 1 ? t('member-count-singular') : t('member-count-plural')}`, 
@@ -1241,6 +1530,9 @@ export default function DirectoryScreen() {
                           onPress={() => {
                             if (option.id === 'parish-council-option') {
                               (navigation as any).navigate('ParishCouncil');
+                            } else if (option.id === 'priests') {
+                              setActiveCategory('priests');
+                              setPriestSearch('');
                             } else {
                               setActiveCategory(option.id);
                               setSelectedHouseId(null);
@@ -1286,10 +1578,17 @@ export default function DirectoryScreen() {
                     <Text style={styles['quick-contacts-header']}>{t('quick-contacts')}</Text>
                     <View style={styles['quick-contacts-card']}>
                       {(quickContacts.length > 0 ? quickContacts : DEFAULT_FALLBACK_CONTACTS).map((contact, index, arr) => {
-                        const roleTitle = contact.role || contact.role_title || '';
+                        const roleTitle = sanitizeClergyTitle(contact.role || contact.role_title || '');
                         const roleKey = roleTitle.toLowerCase().replace(/\s+/g, '-');
                         const translated = t(roleKey);
-                        const displayRole = translated && translated !== roleKey ? translated : roleTitle;
+                        const baseRole = translated && translated !== roleKey ? translated : roleTitle;
+                        const isVicarContact =
+                          roleTitle.toLowerCase().includes('vicar') &&
+                          !roleTitle.toLowerCase().includes('assistant') &&
+                          !roleTitle.toLowerCase().includes('asst');
+                        const displayRole = isVicarContact
+                          ? `${baseRole} • ${isMl ? 'ഇടവക വികാരി (Head of Parish)' : 'Head of Parish'}`
+                          : baseRole;
                         const phone = contact.phone || contact.phone_number || '';
 
                         return (

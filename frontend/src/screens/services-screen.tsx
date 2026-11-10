@@ -245,7 +245,7 @@ export default function ServicesScreen({ navigation }: any) {
                   {mass.language} Holy Mass
                 </Text>
                 <Text style={styles.listItemDesc}>
-                  {mass.celebrant || 'Parish Priest'}
+                  {(mass.celebrant || 'Parish Priest').replace(/\bAssociate Pastor\b/gi, 'Assistant Vicar').replace(/\bSenior Pastor\b/gi, 'Vicar')}
                   {mass.notes ? ` • ${mass.notes}` : ''}
                 </Text>
               </View>

@@ -170,8 +170,8 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_clergy_directory_name ON clergy_directory(
 CREATE OR REPLACE VIEW clergy AS SELECT * FROM clergy_directory;
 
 INSERT INTO clergy_directory (name, role_type, designation, address, email, phone_number, blood_group, avatar_url, display_order) VALUES
-('Rev. Fr. Joseph Mathew', 'parish-priest', 'Vicar', NULL, 'pp.stjosephdevagiri@gmail.com', '+91 98450 00001', 'O+', NULL, 1),
-('Rev. Fr. George Varghese', 'parish-priest', 'Associate Pastor', NULL, 'assoc.stjosephdevagiri@gmail.com', '+91 98450 00002', 'O+', NULL, 2),
+('Rev. Fr. Joseph Mathew', 'Vicar', 'Vicar', NULL, 'pp.stjosephdevagiri@gmail.com', '+91 98450 00001', 'O+', NULL, 1),
+('Rev. Fr. George Varghese', 'Assistant Vicar', 'Assistant Vicar', NULL, 'assoc.stjosephdevagiri@gmail.com', '+91 98450 00002', 'O+', NULL, 2),
 ('Sr. Anitha Thomas', 'sister', 'School Principal', 'CMC', NULL, '+91 98450 00003', 'O+', NULL, 3),
 ('Sr. Mary Joseph', 'sister', 'Social Service Wing', 'CMI', NULL, '+91 98450 00004', 'O+', NULL, 4)
 ON CONFLICT (name) DO NOTHING;

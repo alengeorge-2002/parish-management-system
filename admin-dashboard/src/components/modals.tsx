@@ -1325,25 +1325,51 @@ export function WardModal({
   );
 }
 
+const CLERGY_ROLE_OPTIONS = [
+  "Vicar",
+  "Assistant Vicar",
+  "Resident Priest",
+  "Visiting Priest",
+  "Religious Sister",
+];
+
+function normalizeClergyFormRole(rawRole?: string, rawTitle?: string): string {
+  const combined = `${rawRole || ""} ${rawTitle || ""}`.toLowerCase();
+  if (combined.includes("assistant") || combined.includes("asst") || combined.includes("associate")) {
+    return "Assistant Vicar";
+  }
+  if (combined.includes("visiting")) return "Visiting Priest";
+  if (combined.includes("sister") || combined.includes("principal") || combined.includes("social service")) {
+    return "Religious Sister";
+  }
+  if (combined.includes("resident")) return "Resident Priest";
+  if (combined.includes("vicar") || rawRole === "parish-priest") return "Vicar";
+  if (combined.includes("priest")) return "Resident Priest";
+  return CLERGY_ROLE_OPTIONS.includes(rawRole || "") ? (rawRole as string) : "Resident Priest";
+}
+
 /* ---------- Add/Edit Clergy Modal ---------- */
 export function ClergyModal({
   open,
   onClose,
   onSave,
   initialData,
+  defaultRole = "Resident Priest",
 }: {
   open: boolean;
   onClose: () => void;
   onSave: (data: any) => Promise<void> | void;
   initialData?: any;
+  defaultRole?: string;
 }) {
   const { tt } = useApp();
   const [saving, setSaving] = useState(false);
+  const [errorMsg, setErrorMsg] = useState("");
   const [avatarFile, setAvatarFile] = useState<File | null>(null);
   const [formData, setFormData] = useState({
     name: "",
-    title: "Fr. Vicar",
-    role: "Vicar",
+    title: defaultRole,
+    role: defaultRole,
     phone: "",
     email: "",
     bio: "",
@@ -1352,36 +1378,72 @@ export function ClergyModal({
 
   useEffect(() => {
     setAvatarFile(null);
+    setErrorMsg("");
     if (initialData) {
+      const normalizedRole = normalizeClergyFormRole(
+        initialData.role || initialData.role_type,
+        initialData.title || initialData.designation
+      );
       setFormData({
         name: initialData.name || "",
-        title: initialData.title || initialData.designation || "Fr. Vicar",
-        role: initialData.role || initialData.role_type || "Vicar",
+        title: initialData.title || initialData.designation || normalizedRole,
+        role: normalizedRole,
         phone: initialData.phone || initialData.phone_number || "",
         email: initialData.email || "",
         bio: initialData.bio || initialData.address || "",
         isCurrent: initialData.isCurrent !== undefined ? initialData.isCurrent : true,
       });
     } else {
+      const initRole = CLERGY_ROLE_OPTIONS.includes(defaultRole) ? defaultRole : "Resident Priest";
       setFormData({
         name: "",
-        title: "Fr. Vicar",
-        role: "Vicar",
+        title: initRole === "Vicar" ? "Vicar / വികാരി" : initRole === "Assistant Vicar" ? "Assistant Vicar / സഹവികാരി" : initRole,
+        role: initRole,
         phone: "",
         email: "",
         bio: "",
         isCurrent: true,
       });
     }
-  }, [initialData, open]);
+  }, [initialData, open, defaultRole]);
+
+  const handleRoleChange = (nextRole: string) => {
+    setFormData((prev) => {
+      const autoDefaults = new Set([
+        "",
+        "Vicar",
+        "Vicar / വികാരി",
+        "Assistant Vicar",
+        "Assistant Vicar / സഹവികാരി",
+        "Resident Priest",
+        "Visiting Priest",
+        "Religious Sister",
+        "Parish Priest",
+        prev.role,
+      ]);
+      const nextTitle = autoDefaults.has(prev.title.trim())
+        ? nextRole === "Vicar"
+          ? "Vicar / വികാരി"
+          : nextRole === "Assistant Vicar"
+            ? "Assistant Vicar / സഹവികാരി"
+            : nextRole
+        : prev.title;
+      return { ...prev, role: nextRole, title: nextTitle };
+    });
+  };
 
   const handleSave = async () => {
+    if (!formData.name.trim()) {
+      setErrorMsg("Full name is required.");
+      return;
+    }
+    setErrorMsg("");
     setSaving(true);
     try {
       const fd = new FormData();
-      fd.append("name", formData.name);
-      fd.append("title", formData.title);
-      fd.append("designation", formData.title);
+      fd.append("name", formData.name.trim());
+      fd.append("title", formData.title.trim() || formData.role);
+      fd.append("designation", formData.title.trim() || formData.role);
       fd.append("role", formData.role);
       fd.append("role_type", formData.role);
       fd.append("phone", formData.phone);
@@ -1400,8 +1462,8 @@ export function ClergyModal({
       }
       await onSave(fd);
       onClose();
-    } catch (e) {
-      console.error(e);
+    } catch (e: any) {
+      setErrorMsg(e?.message || "Failed to save clergy record.");
     } finally {
       setSaving(false);
     }
@@ -1426,17 +1488,22 @@ export function ClergyModal({
         </>
       }
     >
+      {errorMsg && (
+        <div className="mb-4 rounded-lg border border-rose-500/40 bg-rose-500/10 px-3 py-2 text-xs text-rose-300">
+          {errorMsg}
+        </div>
+      )}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <Field label="Full Name">
           <Input
-            placeholder="e.g. Fr. Sebastian Vadakkumchery"
+            placeholder="e.g. Rev. Fr. Joseph Mathew"
             value={formData.name}
             onChange={(e) => setFormData({ ...formData, name: e.target.value })}
           />
         </Field>
         <Field label="Title / Designation">
           <Input
-            placeholder="e.g. Parish Priest / Vicar"
+            placeholder="e.g. Vicar / വികാരി"
             value={formData.title}
             onChange={(e) => setFormData({ ...formData, title: e.target.value })}
           />
@@ -1444,13 +1511,13 @@ export function ClergyModal({
         <Field label="Role Type">
           <Select
             value={formData.role}
-            onChange={(e) => setFormData({ ...formData, role: e.target.value })}
+            onChange={(e) => handleRoleChange(e.target.value)}
           >
             <option value="Vicar">Vicar</option>
             <option value="Assistant Vicar">Assistant Vicar</option>
-            <option value="Trustee">Trustee</option>
-            <option value="Secretary">Secretary</option>
-            <option value="Council">Council Member</option>
+            <option value="Resident Priest">Resident Priest</option>
+            <option value="Visiting Priest">Visiting Priest</option>
+            <option value="Religious Sister">Religious Sister</option>
           </Select>
         </Field>
         <Field label="Phone">

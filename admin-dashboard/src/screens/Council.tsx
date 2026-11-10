@@ -2,7 +2,7 @@ import React, { useState, useEffect } from "react";
 import { Plus, Phone, UserPlus, Pencil, Crown, Check, Search, Trash2 } from "lucide-react";
 import { Card, Pill, Button, IconButton, Modal, Field, Input, Select } from "../components/ui";
 import { useApp } from "../lib/app-context";
-import { fetchApi, parishCouncilApi, membersApi } from "../utils/api-client";
+import { fetchApi, parishCouncilApi, membersApi, clergyApi } from "../utils/api-client";
 import getMemberAvatar from "../utils/getMemberAvatar";
 
 export default function Council() {
@@ -21,6 +21,8 @@ export default function Council() {
   const [repPhoneInput, setRepPhoneInput] = useState("");
   const [termInput, setTermInput] = useState("2025 – 2027");
   const [parishionersList, setParishionersList] = useState<any[]>([]);
+  const [clergyList, setClergyList] = useState<any[]>([]);
+  const [selectedClergy, setSelectedClergy] = useState<any>(null);
   const [savingAssignment, setSavingAssignment] = useState(false);
 
   const [seatFormData, setSeatFormData] = useState({
@@ -43,7 +45,21 @@ export default function Council() {
       null;
     const isFilled =
       Boolean(resolvedHolder) &&
-      (s.status === "filled" || Boolean(s.member_id));
+      (s.status === "filled" || Boolean(s.member_id) || Boolean(s.clergy_id || s.clergyId));
+    const lowerTitle = rawTitle.toLowerCase();
+    const isClergySeat = Boolean(
+      s.is_clergy_seat ||
+        s.isClergySeat ||
+        ((s.category === "executive" || s.committee_type === "executive") && lowerTitle.includes("vicar"))
+    );
+    const clergyRoleTarget =
+      s.clergy_role_target ||
+      s.clergyRoleTarget ||
+      (isClergySeat
+        ? lowerTitle.includes("assistant") || lowerTitle.includes("asst")
+          ? "Assistant Vicar"
+          : "Vicar"
+        : null);
 
     return {
       id: s.id || s._id,
@@ -52,6 +68,9 @@ export default function Council() {
       category: s.category || (s.committee_type === "executive" ? "executive" : "ward_rep"),
       wardId: s.ward_id ? String(s.ward_id) : null,
       memberId: s.member_id ? String(s.member_id) : null,
+      clergyId: s.clergy_id || s.clergyId ? String(s.clergy_id || s.clergyId) : null,
+      isClergySeat,
+      clergyRoleTarget,
       holder: isFilled ? resolvedHolder : null,
       houseName: isFilled ? s.house_name || s.houseName || "" : "",
       ward:
@@ -110,15 +129,45 @@ export default function Council() {
     }
   };
 
+  const loadClergy = async () => {
+    try {
+      const data = await clergyApi.list();
+      if (Array.isArray(data)) {
+        setClergyList(
+          data.map((c: any) => ({
+            id: String(c.id || c._id),
+            name: c.name || "Rev. Priest",
+            designation: c.designation || c.title || c.role_type || "Priest",
+            role: c.role_type || c.role || c.designation || "Resident Priest",
+            phone: c.phone_number || c.phone || "",
+            avatar: c.avatar_url || c.avatarUrl || "",
+          }))
+        );
+      }
+    } catch (e) {
+      console.error("[Council] API clergy fetch error:", e);
+    }
+  };
+
   useEffect(() => {
     loadSeats();
     loadParishioners();
+    loadClergy();
   }, []);
 
   const filled = councilSeats.filter((s) => s.status === "filled").length;
   const vacant = councilSeats.length - filled;
 
   const isWardSeat = Boolean(selectedSeat?.wardId || selectedSeat?.category === "ward_rep");
+  const isClergySeat = Boolean(selectedSeat?.isClergySeat);
+
+  const filteredClergy = clergyList.filter((c) => {
+    const isSister = `${c.role} ${c.designation}`.toLowerCase().includes("sister");
+    if (isSister) return false;
+    if (!searchQuery.trim()) return true;
+    const q = searchQuery.toLowerCase().trim();
+    return `${c.name} ${c.designation} ${c.role} ${c.phone}`.toLowerCase().includes(q);
+  });
 
   const filteredParishioners = parishionersList
     .filter((p) => {
@@ -143,6 +192,7 @@ export default function Council() {
     setSearchQuery("");
     setWardOnlyFilter(false);
     setSelectedParishioner(null);
+    setSelectedClergy(null);
     setRepNameInput(seat.holder || "");
     setRepPhoneInput(seat.phone || "");
     setTermInput(seat.term || "2025 – 2027");
@@ -153,21 +203,55 @@ export default function Council() {
     setSelectedSeat(seat);
     setSearchQuery("");
     setWardOnlyFilter(false);
-    const existing = parishionersList.find(
-      (p) =>
-        (seat.memberId && String(p.id) === String(seat.memberId)) ||
-        p.name.toLowerCase() === (seat.holder || "").toLowerCase() ||
-        (p.phone && p.phone === seat.phone)
-    );
+    const existingClergy = seat.isClergySeat
+      ? clergyList.find(
+          (c) =>
+            (seat.clergyId && String(c.id) === String(seat.clergyId)) ||
+            c.name.toLowerCase() === (seat.holder || "").toLowerCase()
+        )
+      : null;
+    setSelectedClergy(existingClergy || null);
+    const existing = !seat.isClergySeat
+      ? parishionersList.find(
+          (p) =>
+            (seat.memberId && String(p.id) === String(seat.memberId)) ||
+            p.name.toLowerCase() === (seat.holder || "").toLowerCase() ||
+            (p.phone && p.phone === seat.phone)
+        )
+      : null;
     setSelectedParishioner(existing || null);
-    setRepNameInput(seat.holder || existing?.name || "");
-    setRepPhoneInput(seat.phone || existing?.phone || "");
+    setRepNameInput(seat.holder || existing?.name || existingClergy?.name || "");
+    setRepPhoneInput(seat.phone || existing?.phone || existingClergy?.phone || "");
     setTermInput(seat.term || "2025 – 2027");
     setIsAssignModalOpen(true);
   };
 
   const handleConfirmAssignment = async () => {
     if (!selectedSeat) return;
+    if (isClergySeat) {
+      if (!selectedClergy) return;
+      setSavingAssignment(true);
+      try {
+        await parishCouncilApi.assignSeat(selectedSeat.id, {
+          clergyId: selectedClergy.id,
+          clergy_id: selectedClergy.id,
+          term: termInput.trim() || "2025 – 2027",
+        });
+        await Promise.all([loadSeats(), loadClergy()]);
+        toast(
+          lang === "en"
+            ? `Assigned ${selectedClergy.name} as ${selectedSeat.seat}`
+            : `${selectedClergy.name}നെ ${selectedSeat.seat} ആയി നിയമിച്ചു`
+        );
+        setIsAssignModalOpen(false);
+      } catch (err: any) {
+        toast(err.message || "Failed to assign clergy seat");
+      } finally {
+        setSavingAssignment(false);
+      }
+      return;
+    }
+
     if (!isWardSeat && !selectedParishioner) return;
     if (isWardSeat && !selectedParishioner && !repNameInput.trim()) return;
 
@@ -342,11 +426,9 @@ export default function Council() {
                   <Pill tone={s.status === "filled" ? "green" : "red"} className="uppercase">
                     {s.status === "filled"
                       ? lang === "en"
-                        ? "Filled"
+                        ? "FILLED"
                         : "നിറഞ്ഞു"
-                      : lang === "en"
-                        ? "Vacant"
-                        : "ഒഴിവ്"}
+                      : "VACANT / ഒഴിവ്"}
                   </Pill>
                 </td>
                 <td className="px-5 py-3">
@@ -358,7 +440,11 @@ export default function Council() {
                         onClick={() => handleOpenAssignModal(s)}
                       >
                         <UserPlus className="h-3.5 w-3.5" />
-                        {lang === "en" ? "Assign" : "നിയമിക്കുക"}
+                        {s.isClergySeat
+                          ? "Assign from Clergy"
+                          : lang === "en"
+                            ? "Assign"
+                            : "നിയമിക്കുക"}
                       </Button>
                     ) : (
                       <>
@@ -465,18 +551,26 @@ export default function Council() {
         </form>
       </Modal>
 
-      {/* Searchable Parishioner Selector / Edit Seat Modal */}
+      {/* Searchable Selector / Edit Seat Modal */}
       <Modal
         open={isAssignModalOpen}
         onClose={() => setIsAssignModalOpen(false)}
         title={`${selectedSeat?.seat || "Council Seat"} - ${
-          selectedSeat?.status === "vacant" ? "Assign Member" : "Edit Seat Assignment"
+          selectedSeat?.status === "vacant"
+            ? isClergySeat
+              ? "Assign from Clergy"
+              : "Assign Member"
+            : "Edit Seat Assignment"
         }`}
-        subtitle="Select a registered parishioner from the live directory to occupy this seat."
+        subtitle={
+          isClergySeat
+            ? "Select an ordained priest from the Clergy Directory to hold this office."
+            : "Select a registered parishioner from the live directory to occupy this seat."
+        }
         wide
         footer={
           <>
-            {selectedSeat?.status === "filled" && (
+            {selectedSeat?.status === "filled" && selectedSeat?.clergyRoleTarget !== "Vicar" && (
               <Button
                 variant="danger"
                 className="mr-auto text-xs"
@@ -494,7 +588,11 @@ export default function Council() {
               onClick={handleConfirmAssignment}
               disabled={
                 savingAssignment ||
-                (isWardSeat ? !selectedParishioner && !repNameInput.trim() : !selectedParishioner)
+                (isClergySeat
+                  ? !selectedClergy
+                  : isWardSeat
+                    ? !selectedParishioner && !repNameInput.trim()
+                    : !selectedParishioner)
               }
             >
               <Check className="h-4 w-4" />
@@ -520,7 +618,61 @@ export default function Council() {
             </div>
           )}
 
-          <Field label="Search Parishioner">
+          {isClergySeat ? (
+            <>
+              <Field label="Search Clergy Directory">
+                <div className="relative flex items-center">
+                  <Search className="absolute left-3 h-4 w-4 text-slate-400" />
+                  <Input
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    placeholder="Search priest by name, designation, or phone..."
+                    className="pl-9 bg-[#181b22] border-[#2d323e] text-slate-200 placeholder:text-slate-500"
+                  />
+                </div>
+              </Field>
+
+              <div className="space-y-1.5">
+                <div className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
+                  Select Priest from Clergy ({filteredClergy.length} available)
+                </div>
+                <div className="max-h-56 overflow-y-auto space-y-1.5 pr-1 rounded-lg border border-[#2d323e] bg-[#181b22] p-2">
+                  {filteredClergy.length === 0 ? (
+                    <div className="py-4 text-center text-xs text-slate-500">
+                      No matching priest found in Clergy Management. Add a priest in Clergy Management first.
+                    </div>
+                  ) : (
+                    filteredClergy.map((c) => {
+                      const isSel = selectedClergy?.id === c.id;
+                      return (
+                        <div
+                          key={c.id}
+                          onClick={() => setSelectedClergy(c)}
+                          className={`flex items-center justify-between p-2.5 rounded-lg border transition-all cursor-pointer ${
+                            isSel
+                              ? "border-[#F4C430] bg-[#F4C430]/10 text-white shadow-md"
+                              : "border-[#2d323e] bg-[#1e222b] text-slate-300 hover:border-slate-600 hover:bg-[#252a36]"
+                          }`}
+                        >
+                          <div>
+                            <div className="text-xs font-semibold text-slate-100">{c.name}</div>
+                            <div className="text-[11px] text-slate-400 font-mono">
+                              {c.designation} · {c.phone || "No phone"}
+                            </div>
+                          </div>
+                          <Pill tone={isSel ? "gold" : "neutral"} className="text-[10px]">
+                            {c.role}
+                          </Pill>
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
+              </div>
+            </>
+          ) : (
+            <>
+              <Field label="Search Parishioner">
             <div className="relative flex items-center">
               <Search className="absolute left-3 h-4 w-4 text-slate-400" />
               <Input
@@ -652,6 +804,8 @@ export default function Council() {
                 />
               </Field>
             </div>
+          )}
+            </>
           )}
 
           <Field label="കാലാവധി / Term">

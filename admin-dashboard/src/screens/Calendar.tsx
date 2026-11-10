@@ -978,7 +978,7 @@ function MassTimingModal({
   const [error, setError] = useState("");
 
   const presetCelebrants = Array.from(
-    new Set(["Parish Priest", "Associate Pastor", ...clergyNames])
+    new Set(["Vicar / Parish Priest", "Assistant Vicar", "Parish Priest", ...clergyNames])
   );
 
   useEffect(() => {

@@ -118,7 +118,7 @@ export const FAMILIES: Family[] = [
 
 export const CLERGY: Clergy[] = [
   { id: "C-1", name: "Fr. Sebastian Vadakkumchery", title: "Vicar", role: "Parish Priest & Presbyter", phone: "+91 94470 90001", portrait: AV("photo-1560250097-0b93528c311a", 400), tenure: "2021 – Present", primary: true },
-  { id: "C-2", name: "Fr. Jomon Palakkappilly", title: "Assistant Vicar", role: "Associate Pastor", phone: "+91 94470 90002", portrait: AV("photo-1600180758890-6b94519a8ba6", 400), tenure: "2023 – Present" },
+  { id: "C-2", name: "Fr. Jomon Palakkappilly", title: "Assistant Vicar", role: "Assistant Vicar / സഹവികാരി", phone: "+91 94470 90002", portrait: AV("photo-1600180758890-6b94519a8ba6", 400), tenure: "2023 – Present" },
   { id: "C-3", name: "Dr. Mathew Kalapurackal", title: "Trustee", role: "Parish Council Secretary", phone: "+91 94470 90003", portrait: AV("photo-1519085360753-af0119f7cbe7", 400), tenure: "2024 – 2026" },
   { id: "C-4", name: "Mrs. Gracy Thundiyil", title: "Trustee", role: "Treasurer & Finance Council", phone: "+91 94470 90004", portrait: AV("photo-1573497019940-1c28c88b4f3e", 400), tenure: "2024 – 2026" },
   { id: "C-5", name: "Mr. Varghese Ambatt", title: "Kaikkaran", role: "Lay Leader & Vice President", phone: "+91 94470 90005", portrait: AV("photo-1566492031773-4f4e44671857", 400), tenure: "2023 – 2025" },

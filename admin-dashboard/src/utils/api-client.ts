@@ -240,8 +240,32 @@ export interface ClergyData {
   avatarUrl?: string;
 }
 
+export interface LeadershipHolder {
+  id: string;
+  name: string;
+  phone: string;
+  email?: string | null;
+  designation?: string | null;
+  avatar_url?: string | null;
+}
+
+export interface LeadershipStatusResponse {
+  vicar: {
+    required: boolean;
+    isFilled: boolean;
+    holder: LeadershipHolder | null;
+  };
+  assistantVicar: {
+    required: boolean;
+    isFilled: boolean;
+    holder: LeadershipHolder | null;
+  };
+  hasHeadOfParish: boolean;
+}
+
 export const clergyApi = {
   list: () => fetchApi('/admin/clergy'),
+  leadershipStatus: (): Promise<LeadershipStatusResponse> => fetchApi('/clergy/leadership-status'),
   create: (data: ClergyData | FormData) => fetchApi('/admin/clergy', {
     method: 'POST',
     body: data instanceof FormData ? data : JSON.stringify(data),
@@ -408,7 +432,7 @@ export const parishCouncilApi = {
     method: 'POST',
     body: JSON.stringify(data),
   }),
-  assignSeat: (id: string | number, data: { memberId?: string | number; member_id?: string | number; term?: string; occupantName?: string; phone?: string }) => fetchApi(`/parish-council/seats/${id}/assign`, {
+  assignSeat: (id: string | number, data: { memberId?: string | number; member_id?: string | number; clergyId?: string | number; clergy_id?: string | number; term?: string; occupantName?: string; phone?: string }) => fetchApi(`/parish-council/seats/${id}/assign`, {
     method: 'PUT',
     body: JSON.stringify(data),
   }),

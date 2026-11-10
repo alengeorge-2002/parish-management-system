@@ -56,7 +56,8 @@ router.get('/religious-houses', getAllReligiousHouses);
 router.post('/religious-houses/:id/residents', addResidentToHouse);
 router.delete('/religious-houses/:id/residents/:residentId', removeResidentFromHouse);
 
-import { getClergy } from '../controllers/clergy-controller';
+import { getClergy, getLeadershipStatus } from '../controllers/clergy-controller';
+router.get('/clergy/leadership-status', getLeadershipStatus);
 router.get('/clergy', getClergy);
 
 // Ensure the logged-in user is an administrator for write/management endpoints

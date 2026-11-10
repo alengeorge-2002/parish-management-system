@@ -1,5 +1,11 @@
 import { Request, Response, NextFunction } from 'express';
 import { pool } from '../config/db';
+import {
+  checkParishLeadershipStatus,
+  isVicarRecord,
+  isAssistantVicarRecord,
+  type ParishLeadershipStatus,
+} from './clergy-controller';
 
 const parseId = (val: any): number | null => {
   if (!val) return null;
@@ -141,9 +147,17 @@ const SEAT_SELECT_QUERY = `
   LEFT JOIN families wf ON wm.family_id = wf.id
 `;
 
-const mapSeatRow = (row: any) => {
+const clergyTargetForSeatTitle = (roleTitle?: string | null): 'Vicar' | 'Assistant Vicar' | null => {
+  const lower = String(roleTitle || '').toLowerCase();
+  if (!lower.includes('vicar')) return null;
+  if (lower.includes('assistant') || lower.includes('asst')) return 'Assistant Vicar';
+  return 'Vicar';
+};
+
+const mapSeatRow = (row: any, leadership?: ParishLeadershipStatus) => {
   const normalizedCategory =
     (row.committee_type || '').toLowerCase() === 'executive' ? 'executive' : 'ward_rep';
+  const clergyRoleTarget = normalizedCategory === 'executive' ? clergyTargetForSeatTitle(row.role_title) : null;
 
   let isFilled = false;
   let fullName: string | null = null;
@@ -151,8 +165,29 @@ const mapSeatRow = (row: any) => {
   let phone: string | null = null;
   let email: string | null = null;
   let linkedMemberId: string | null = null;
+  let linkedClergyId: string | null = null;
 
-  if (normalizedCategory === 'ward_rep' && row.ward_id) {
+  if (clergyRoleTarget && leadership) {
+    const slot = clergyRoleTarget === 'Vicar' ? leadership.vicar : leadership.assistantVicar;
+    if (slot.isFilled && slot.holder && slot.holder.source === 'clergy_directory') {
+      isFilled = true;
+      fullName = slot.holder.name;
+      phone = slot.holder.phone || null;
+      email = slot.holder.email || null;
+      houseName =
+        clergyRoleTarget === 'Vicar'
+          ? 'Head of Parish / വികാരി'
+          : 'Vice President / സഹവികാരി';
+      linkedClergyId = String(slot.holder.id);
+    } else if (row.real_member_id) {
+      isFilled = true;
+      fullName = `${row.first_name || ''} ${row.last_name || ''}`.trim();
+      houseName = row.house_name || row.family_name || null;
+      phone = row.phone_number || row.phone || null;
+      email = row.email || null;
+      linkedMemberId = String(row.real_member_id);
+    }
+  } else if (normalizedCategory === 'ward_rep' && row.ward_id) {
     const wardRepName =
       row.ward_rep_name && row.ward_rep_name.trim().toLowerCase() !== 'unassigned'
         ? row.ward_rep_name.trim()
@@ -201,6 +236,12 @@ const mapSeatRow = (row: any) => {
     term: row.term || DEFAULT_TERM,
     status: isFilled ? 'filled' : 'vacant',
     member_id: linkedMemberId,
+    clergy_id: linkedClergyId,
+    clergyId: linkedClergyId,
+    is_clergy_seat: Boolean(clergyRoleTarget),
+    isClergySeat: Boolean(clergyRoleTarget),
+    clergy_role_target: clergyRoleTarget,
+    clergyRoleTarget,
     occupant_name: fullName,
     occupantName: fullName,
     first_name: isFilled ? (row.first_name || row.wm_first_name || '') : '',
@@ -226,16 +267,19 @@ const mapSeatRow = (row: any) => {
 export const getAllSeatsAdmin = async (_req: Request, res: Response): Promise<void> => {
   try {
     await ensureCouncilSeatsSeeded();
-    const result = await pool.query(
-      `${SEAT_SELECT_QUERY}
-       ORDER BY
-         CASE WHEN LOWER(pc.committee_type) = 'executive' THEN 0 ELSE 1 END ASC,
-         pc.display_order ASC,
-         COALESCE(w.ward_number, pc.ward_id, pc.id) ASC,
-         pc.id ASC`
-    );
+    const [result, leadership] = await Promise.all([
+      pool.query(
+        `${SEAT_SELECT_QUERY}
+         ORDER BY
+           CASE WHEN LOWER(pc.committee_type) = 'executive' THEN 0 ELSE 1 END ASC,
+           pc.display_order ASC,
+           COALESCE(w.ward_number, pc.ward_id, pc.id) ASC,
+           pc.id ASC`
+      ),
+      checkParishLeadershipStatus(),
+    ]);
 
-    const mapped = result.rows.map(mapSeatRow);
+    const mapped = result.rows.map((row: any) => mapSeatRow(row, leadership));
     res.status(200).json(mapped);
   } catch (error: any) {
     console.error('Error fetching admin seats:', error);
@@ -298,16 +342,19 @@ export const createSeat = async (req: Request, res: Response): Promise<void> => 
       ]
     );
 
-    const result = await pool.query(
-      `${SEAT_SELECT_QUERY}
-       ORDER BY
-         CASE WHEN LOWER(pc.committee_type) = 'executive' THEN 0 ELSE 1 END ASC,
-         pc.display_order ASC,
-         COALESCE(w.ward_number, pc.ward_id, pc.id) ASC,
-         pc.id ASC`
-    );
+    const [result, leadership] = await Promise.all([
+      pool.query(
+        `${SEAT_SELECT_QUERY}
+         ORDER BY
+           CASE WHEN LOWER(pc.committee_type) = 'executive' THEN 0 ELSE 1 END ASC,
+           pc.display_order ASC,
+           COALESCE(w.ward_number, pc.ward_id, pc.id) ASC,
+           pc.id ASC`
+      ),
+      checkParishLeadershipStatus(),
+    ]);
 
-    res.status(201).json(result.rows.map(mapSeatRow));
+    res.status(201).json(result.rows.map((row: any) => mapSeatRow(row, leadership)));
   } catch (error: any) {
     console.error('Error creating seat:', error);
     res.status(500).json({ error: error.message || 'Failed to create seat.' });
@@ -323,6 +370,8 @@ export const assignSeat = async (req: Request, res: Response): Promise<void> => 
   const {
     memberId,
     member_id,
+    clergyId,
+    clergy_id,
     occupantName,
     occupant_name,
     representativeName,
@@ -332,6 +381,7 @@ export const assignSeat = async (req: Request, res: Response): Promise<void> => 
     term,
   } = req.body;
   const targetMemberId = parseId(memberId || member_id);
+  const targetClergyId = parseId(clergyId || clergy_id);
 
   if (!id) {
     res.status(400).json({ error: 'Valid seat id is required.' });
@@ -347,6 +397,46 @@ export const assignSeat = async (req: Request, res: Response): Promise<void> => 
     }
     const seat = seatRes.rows[0];
     const hasWardLink = Boolean(seat.ward_id);
+    const clergyTarget = clergyTargetForSeatTitle(seat.role_title);
+
+    // Handle direct promotion/assignment from Clergy Directory for Vicar / Assistant Vicar seats
+    if (clergyTarget && targetClergyId) {
+      const clergyRes = await pool.query('SELECT * FROM clergy_directory WHERE id = $1', [targetClergyId]);
+      if (clergyRes.rows.length === 0) {
+        res.status(404).json({ error: 'Selected clergy profile does not exist.' });
+        return;
+      }
+
+      const existingClergy = await pool.query('SELECT * FROM clergy_directory WHERE id != $1', [targetClergyId]);
+      for (const row of existingClergy.rows || []) {
+        const shouldDemote =
+          (clergyTarget === 'Vicar' && isVicarRecord(row)) ||
+          (clergyTarget === 'Assistant Vicar' && isAssistantVicarRecord(row));
+        if (shouldDemote) {
+          await pool.query(
+            `UPDATE clergy_directory SET role_type = 'Resident Priest', designation = 'Resident Priest', display_order = 10 WHERE id = $1`,
+            [row.id]
+          );
+        }
+      }
+
+      const nextOrder = clergyTarget === 'Vicar' ? 1 : 2;
+      await pool.query(
+        `UPDATE clergy_directory SET role_type = $1, designation = $1, display_order = $2 WHERE id = $3`,
+        [clergyTarget, nextOrder, targetClergyId]
+      );
+
+      if (term && String(term).trim()) {
+        await pool.query(`UPDATE parish_council SET term = $1 WHERE id = $2`, [String(term).trim(), id]);
+      }
+
+      const [joined, leadership] = await Promise.all([
+        pool.query(`${SEAT_SELECT_QUERY} WHERE pc.id = $1`, [id]),
+        checkParishLeadershipStatus(),
+      ]);
+      res.status(200).json(mapSeatRow(joined.rows[0], leadership));
+      return;
+    }
 
     const explicitName = (occupantName || occupant_name || representativeName || representative_name || '').trim();
     const explicitPhone = (phone || representative_phone || '').trim();
@@ -373,7 +463,7 @@ export const assignSeat = async (req: Request, res: Response): Promise<void> => 
       finalName = finalName || `${m.first_name || ''} ${m.last_name || ''}`.trim();
       finalPhone = finalPhone || m.phone_number || null;
     } else if (!hasWardLink || !finalName) {
-      res.status(400).json({ error: 'A valid registered member_id is required to assign a seat.' });
+      res.status(400).json({ error: 'A valid registered member_id or clergy_id is required to assign a seat.' });
       return;
     }
 
@@ -401,8 +491,11 @@ export const assignSeat = async (req: Request, res: Response): Promise<void> => 
       );
     }
 
-    const joined = await pool.query(`${SEAT_SELECT_QUERY} WHERE pc.id = $1`, [id]);
-    res.status(200).json(mapSeatRow(joined.rows[0]));
+    const [joined, leadership] = await Promise.all([
+      pool.query(`${SEAT_SELECT_QUERY} WHERE pc.id = $1`, [id]),
+      checkParishLeadershipStatus(),
+    ]);
+    res.status(200).json(mapSeatRow(joined.rows[0], leadership));
   } catch (error: any) {
     console.error('Error assigning seat:', error);
     res.status(500).json({ error: error.message || 'Failed to assign seat.' });
@@ -422,6 +515,35 @@ export const vacateSeat = async (req: Request, res: Response): Promise<void> => 
 
   try {
     await ensureWardsSyncSchema();
+    const seatCheck = await pool.query('SELECT * FROM parish_council WHERE id = $1', [id]);
+    if (seatCheck.rows.length === 0) {
+      res.status(404).json({ error: 'Seat not found.' });
+      return;
+    }
+
+    const seatRow = seatCheck.rows[0];
+    const clergyTarget = clergyTargetForSeatTitle(seatRow.role_title);
+    if (clergyTarget === 'Vicar') {
+      const leadership = await checkParishLeadershipStatus();
+      if (leadership.vicar.isFilled) {
+        res.status(409).json({
+          error: 'Warning: A parish must have a designated Vicar as its head.',
+          code: 'VICAR_REQUIRED',
+        });
+        return;
+      }
+    } else if (clergyTarget === 'Assistant Vicar') {
+      const clergyRes = await pool.query('SELECT * FROM clergy_directory');
+      for (const c of clergyRes.rows || []) {
+        if (isAssistantVicarRecord(c)) {
+          await pool.query(
+            `UPDATE clergy_directory SET role_type = 'Resident Priest', designation = 'Resident Priest', display_order = 10 WHERE id = $1`,
+            [c.id]
+          );
+        }
+      }
+    }
+
     const result = await pool.query(
       `UPDATE parish_council SET
          member_id = NULL,
@@ -432,11 +554,6 @@ export const vacateSeat = async (req: Request, res: Response): Promise<void> => 
        RETURNING id, ward_id`,
       [id]
     );
-
-    if (result.rows.length === 0) {
-      res.status(404).json({ error: 'Seat not found.' });
-      return;
-    }
 
     const wardId = result.rows[0].ward_id;
     if (wardId) {
@@ -451,8 +568,11 @@ export const vacateSeat = async (req: Request, res: Response): Promise<void> => 
       );
     }
 
-    const joined = await pool.query(`${SEAT_SELECT_QUERY} WHERE pc.id = $1`, [id]);
-    res.status(200).json(mapSeatRow(joined.rows[0]));
+    const [joined, leadership] = await Promise.all([
+      pool.query(`${SEAT_SELECT_QUERY} WHERE pc.id = $1`, [id]),
+      checkParishLeadershipStatus(),
+    ]);
+    res.status(200).json(mapSeatRow(joined.rows[0], leadership));
   } catch (error: any) {
     console.error('Error vacating seat:', error);
     res.status(500).json({ error: error.message || 'Failed to vacate seat.' });
@@ -539,93 +659,40 @@ const DEFAULT_CONTACTS = {
  */
 export const getQuickContacts = async (_req: Request, res: Response): Promise<void> => {
   try {
-    // 1. Vicar: Look up in clergy where role/designation ILIKE '%vicar%' (exclude 'asst' or 'assistant')
-    const vicarQuery = `
-      SELECT name, COALESCE(phone_number, '') AS phone
-      FROM clergy
-      WHERE (designation ILIKE '%vicar%' OR role_type ILIKE '%vicar%')
-        AND designation NOT ILIKE '%asst%'
-        AND designation NOT ILIKE '%assistant%'
-        AND role_type NOT ILIKE '%asst%'
-        AND role_type NOT ILIKE '%assistant%'
-      ORDER BY display_order ASC, id ASC
-      LIMIT 1
-    `;
-
-    // 2. Assistant Vicar: Look up in clergy where role/designation ILIKE '%asst%' OR role/designation ILIKE '%assistant%'
-    const asstVicarQuery = `
-      SELECT name, COALESCE(phone_number, '') AS phone
-      FROM clergy
-      WHERE (
-        designation ILIKE '%asst%' OR designation ILIKE '%assistant%' OR designation ILIKE '%associate%' OR
-        role_type ILIKE '%asst%' OR role_type ILIKE '%assistant%' OR role_type ILIKE '%associate%'
-      )
-      ORDER BY display_order ASC, id ASC
-      LIMIT 1
-    `;
-
-    // 3. Parish Secretary: Look up in parish_council or clergy where role/designation ILIKE '%secretary%'
-    const councilSecretaryQuery = `
-      SELECT COALESCE(NULLIF(TRIM(CONCAT(m.first_name, ' ', COALESCE(m.last_name, ''))), ''), pc.occupant_name) AS name,
-             COALESCE(m.phone_number, pc.phone, '') AS phone
-      FROM parish_council pc
-      INNER JOIN members m ON pc.member_id = m.id
-      WHERE pc.role_title ILIKE '%secretary%'
-        AND pc.role_title NOT ILIKE '%joint%'
-        AND pc.status = 'filled'
-      ORDER BY pc.display_order ASC, pc.id ASC
-      LIMIT 1
-    `;
-
-    const clergySecretaryQuery = `
-      SELECT name, COALESCE(phone_number, '') AS phone
-      FROM clergy
-      WHERE designation ILIKE '%secretary%' OR role_type ILIKE '%secretary%'
-      ORDER BY display_order ASC, id ASC
-      LIMIT 1
-    `;
-
-    const [vicarRes, asstVicarRes, councilSecRes, clergySecRes] = await Promise.all([
-      pool.query(vicarQuery).catch(() => pool.query(`
-        SELECT name, COALESCE(phone_number, '') AS phone
-        FROM clergy_directory
-        WHERE (designation ILIKE '%vicar%' OR role_type ILIKE '%vicar%')
-          AND designation NOT ILIKE '%asst%' AND designation NOT ILIKE '%assistant%'
-          AND role_type NOT ILIKE '%asst%' AND role_type NOT ILIKE '%assistant%'
-        ORDER BY display_order ASC, id ASC LIMIT 1
-      `)).catch(() => ({ rows: [] })),
-      pool.query(asstVicarQuery).catch(() => pool.query(`
-        SELECT name, COALESCE(phone_number, '') AS phone
-        FROM clergy_directory
-        WHERE (
-          designation ILIKE '%asst%' OR designation ILIKE '%assistant%' OR designation ILIKE '%associate%' OR
-          role_type ILIKE '%asst%' OR role_type ILIKE '%assistant%' OR role_type ILIKE '%associate%'
-        )
-        ORDER BY display_order ASC, id ASC LIMIT 1
-      `)).catch(() => ({ rows: [] })),
-      pool.query(councilSecretaryQuery).catch(() => ({ rows: [] })),
-      pool.query(clergySecretaryQuery).catch(() => pool.query(`
+    const [leadership, councilSecretaryRes, clergySecretaryRes] = await Promise.all([
+      checkParishLeadershipStatus(),
+      pool.query(`
+        SELECT COALESCE(NULLIF(TRIM(CONCAT(m.first_name, ' ', COALESCE(m.last_name, ''))), ''), pc.occupant_name) AS name,
+               COALESCE(m.phone_number, pc.phone, '') AS phone
+        FROM parish_council pc
+        INNER JOIN members m ON pc.member_id = m.id
+        WHERE pc.role_title ILIKE '%secretary%'
+          AND pc.role_title NOT ILIKE '%joint%'
+          AND pc.status = 'filled'
+        ORDER BY pc.display_order ASC, pc.id ASC
+        LIMIT 1
+      `).catch(() => ({ rows: [] })),
+      pool.query(`
         SELECT name, COALESCE(phone_number, '') AS phone
         FROM clergy_directory
         WHERE designation ILIKE '%secretary%' OR role_type ILIKE '%secretary%'
         ORDER BY display_order ASC, id ASC LIMIT 1
-      `)).catch(() => ({ rows: [] })),
+      `).catch(() => ({ rows: [] })),
     ]);
 
-    // Build Vicar
-    const vicarRow = vicarRes.rows.find((r: any) => r.phone && r.phone.trim() !== '') || vicarRes.rows[0];
-    const vicarName = vicarRow?.name?.trim() || DEFAULT_CONTACTS.vicar.name;
-    const vicarPhone = (vicarRow?.phone && vicarRow.phone.trim() !== '') ? vicarRow.phone.trim() : DEFAULT_CONTACTS.vicar.phone;
+    const vicarName = leadership.vicar.holder?.name?.trim() || DEFAULT_CONTACTS.vicar.name;
+    const vicarPhone = leadership.vicar.holder?.phone?.trim() || DEFAULT_CONTACTS.vicar.phone;
 
-    // Build Assistant Vicar
-    const asstRow = asstVicarRes.rows.find((r: any) => r.phone && r.phone.trim() !== '') || asstVicarRes.rows[0];
-    const asstName = asstRow?.name?.trim() || DEFAULT_CONTACTS.assistantVicar.name;
-    const asstPhone = (asstRow?.phone && asstRow.phone.trim() !== '') ? asstRow.phone.trim() : DEFAULT_CONTACTS.assistantVicar.phone;
+    const asstName = leadership.assistantVicar.holder?.name?.trim() || DEFAULT_CONTACTS.assistantVicar.name;
+    const asstPhone = leadership.assistantVicar.holder?.phone?.trim() || DEFAULT_CONTACTS.assistantVicar.phone;
 
-    // Build Secretary
-    const secRow = (councilSecRes.rows[0]?.phone?.trim() ? councilSecRes.rows[0] : (clergySecRes.rows[0]?.phone?.trim() ? clergySecRes.rows[0] : (councilSecRes.rows[0] || clergySecRes.rows[0])));
+    const secRow = councilSecretaryRes.rows[0]?.phone?.trim()
+      ? councilSecretaryRes.rows[0]
+      : clergySecretaryRes.rows[0]?.phone?.trim()
+        ? clergySecretaryRes.rows[0]
+        : councilSecretaryRes.rows[0] || clergySecretaryRes.rows[0];
     const secName = secRow?.name?.trim() || DEFAULT_CONTACTS.secretary.name;
-    const secPhone = (secRow?.phone && secRow.phone.trim() !== '') ? secRow.phone.trim() : DEFAULT_CONTACTS.secretary.phone;
+    const secPhone = secRow?.phone && secRow.phone.trim() !== '' ? secRow.phone.trim() : DEFAULT_CONTACTS.secretary.phone;
 
     const finalContacts = [
       {
@@ -686,16 +753,19 @@ export const getQuickContacts = async (_req: Request, res: Response): Promise<vo
 export const getParishCouncilDirectory = async (_req: Request, res: Response): Promise<void> => {
   try {
     await ensureCouncilSeatsSeeded();
-    const result = await pool.query(
-      `${SEAT_SELECT_QUERY}
-       ORDER BY
-         CASE WHEN LOWER(pc.committee_type) = 'executive' THEN 0 ELSE 1 END ASC,
-         pc.display_order ASC,
-         COALESCE(w.ward_number, pc.ward_id, pc.id) ASC,
-         pc.id ASC`
-    );
+    const [result, leadership] = await Promise.all([
+      pool.query(
+        `${SEAT_SELECT_QUERY}
+         ORDER BY
+           CASE WHEN LOWER(pc.committee_type) = 'executive' THEN 0 ELSE 1 END ASC,
+           pc.display_order ASC,
+           COALESCE(w.ward_number, pc.ward_id, pc.id) ASC,
+           pc.id ASC`
+      ),
+      checkParishLeadershipStatus(),
+    ]);
 
-    const mapped = result.rows.map(mapSeatRow);
+    const mapped = result.rows.map((row: any) => mapSeatRow(row, leadership));
     res.status(200).json(mapped);
   } catch (error: any) {
     console.error('Error fetching parish council directory:', error);

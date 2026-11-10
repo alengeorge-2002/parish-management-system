@@ -119,11 +119,21 @@ export const autoInitializeDb = async () => {
     await pool.query(`
       INSERT INTO clergy_directory (name, role_type, designation, address, email, phone_number, blood_group, avatar_url, display_order)
       VALUES
-        ('Rev. Fr. Joseph Mathew', 'parish-priest', 'Vicar', NULL, 'pp.stjosephdevagiri@gmail.com', '+91 98450 00001', 'O+', NULL, 1),
-        ('Rev. Fr. George Varghese', 'parish-priest', 'Associate Pastor', NULL, 'assoc.stjosephdevagiri@gmail.com', '+91 98450 00002', 'O+', NULL, 2),
-        ('Sr. Anitha Thomas', 'sister', 'School Principal', 'CMC', NULL, '+91 98450 00003', 'O+', NULL, 3),
-        ('Sr. Mary Joseph', 'sister', 'Social Service Wing', 'CMI', NULL, '+91 98450 00004', 'O+', NULL, 4)
+        ('Rev. Fr. Joseph Mathew', 'Vicar', 'Vicar', NULL, 'pp.stjosephdevagiri@gmail.com', '+91 98450 00001', 'O+', NULL, 1),
+        ('Rev. Fr. George Varghese', 'Assistant Vicar', 'Assistant Vicar', NULL, 'assoc.stjosephdevagiri@gmail.com', '+91 98450 00002', 'O+', NULL, 2),
+        ('Sr. Anitha Thomas', 'Religious Sister', 'School Principal', 'CMC', NULL, '+91 98450 00003', 'O+', NULL, 3),
+        ('Sr. Mary Joseph', 'Religious Sister', 'Social Service Wing', 'CMI', NULL, '+91 98450 00004', 'O+', NULL, 4)
       ON CONFLICT (name) DO NOTHING;
+
+      UPDATE clergy_directory
+      SET designation = 'Assistant Vicar',
+          role_type = CASE WHEN LOWER(role_type) IN ('parish-priest', 'associate pastor') THEN 'Assistant Vicar' ELSE role_type END
+      WHERE designation ILIKE '%Associate Pastor%' OR designation ILIKE '%Asst. Pastor%' OR role_type ILIKE '%Associate Pastor%';
+
+      UPDATE clergy_directory
+      SET designation = 'Vicar',
+          role_type = CASE WHEN LOWER(role_type) IN ('parish-priest', 'senior pastor', 'pastor') THEN 'Vicar' ELSE role_type END
+      WHERE designation ILIKE '%Senior Pastor%' OR TRIM(LOWER(designation)) = 'pastor';
     `);
 
     // 5. Execute init.sql to ensure all other tables, constraints, and initial seed records exist
