@@ -224,10 +224,22 @@ export default function FeastCalendarScreen({ navigation }: any) {
   };
 
   const getDayLiturgicalData = (dateStr: string) => {
-    if (calendarDataMap[dateStr]) {
-      return calendarDataMap[dateStr];
+    const local = dailyReadings[dateStr] || null;
+    const remote = calendarDataMap[dateStr] || null;
+    if (remote && local) {
+      return {
+        ...local,
+        ...remote,
+        occasions: remote.occasions || local.occasions,
+        readings: (Array.isArray(remote.readings) && remote.readings.length > 0) ? remote.readings : local.readings,
+        mass_timings: remote.mass_timings || remote.massTimings || local.mass_timings,
+        massTimings: remote.massTimings || remote.mass_timings || local.massTimings,
+        scripture_readings: (Array.isArray(remote.scripture_readings) && remote.scripture_readings.length > 0)
+          ? remote.scripture_readings
+          : local.scripture_readings,
+      };
     }
-    return dailyReadings[dateStr] || null;
+    return remote || local;
   };
 
   const fetchFeasts = async () => {
@@ -461,15 +473,21 @@ export default function FeastCalendarScreen({ navigation }: any) {
 
     // 5. Liturgical Calendar Occasions & Daily Scripture Readings
     const dayData = getDayLiturgicalData(dateStr);
+    const dayMassTimings = dayData?.massTimings || dayData?.mass_timings || [];
+
     if (dayData) {
       // Backend format (e.g. feastName, season, readings, mass_timings)
-      const hasMassTimings = Array.isArray(dayData.mass_timings) && dayData.mass_timings.length > 0;
-      if (dayData.feastName || (dayData.readings && dayData.readings.length > 0) || hasMassTimings) {
-        const backendReadings = normalizeReadings(dayData.readings);
+      const backendReadings = normalizeReadings(
+        dayData.scriptureReadings || dayData.scripture_readings || dayData.readings
+      );
+      const hasMassTimings = Array.isArray(dayMassTimings) && dayMassTimings.length > 0;
+      const hasOccasions = Array.isArray(dayData.occasions) && dayData.occasions.length > 0;
+
+      if (dayData.feastName || (backendReadings.length > 0 && !hasOccasions) || (hasMassTimings && !hasOccasions && combined.length === 0)) {
         const feastTitleEn = dayData.feastName || dayData.title || dayData.season || 'Daily Parish Schedule';
         const feastTitleMl = dayData.feastNameMl || dayData.titleMl || dayData.seasonMl || 'ഇടവക ദൈനംദിന ക്രമം';
         const massSummary = hasMassTimings
-          ? dayData.mass_timings.map((m: any) => `${m.time} (${m.language})`).join(' • ')
+          ? dayMassTimings.map((m: any) => `${m.time} (${m.language})`).join(' • ')
           : '';
         
         const alreadyHasFeast = combined.some(c => 
@@ -492,7 +510,9 @@ export default function FeastCalendarScreen({ navigation }: any) {
             event_date: dateStr,
             description_en: dayData.season ? `Season: ${dayData.season}` : 'Daily Liturgical Scripture',
             description_ml: dayData.seasonMl ? `കാലം: ${dayData.seasonMl}` : 'ദൈനംദിന തിരുവചന വായനകൾ',
-            readings: backendReadings
+            readings: backendReadings,
+            massTimings: dayMassTimings,
+            mass_timings: dayMassTimings
           });
         }
       }
@@ -501,6 +521,10 @@ export default function FeastCalendarScreen({ navigation }: any) {
       if (dayData.occasions && Array.isArray(dayData.occasions)) {
         dayData.occasions.forEach((occ: any, occIdx: number) => {
           const occReadings = normalizeReadings(occ.readings);
+          const mergedOccReadings =
+            occIdx === 0 && !dayData.feastName && backendReadings.length > 0
+              ? [...backendReadings, ...occReadings]
+              : occReadings;
           const rawNameEn = (occ.name_en || '').replace(/\t+/g, ' ').trim();
           const rawNameMl = (occ.name_ml || occ.name_en || '').replace(/\t+/g, ' ').trim();
           
@@ -513,11 +537,11 @@ export default function FeastCalendarScreen({ navigation }: any) {
           );
 
           if (existingItem) {
-            if (occReadings.length > 0 && (!existingItem.readings || existingItem.readings.length === 0)) {
-              existingItem.readings = occReadings;
+            if (mergedOccReadings.length > 0 && (!existingItem.readings || existingItem.readings.length === 0)) {
+              existingItem.readings = mergedOccReadings;
             }
           } else {
-            const isSignificant = occReadings.length > 0 || 
+            const isSignificant = mergedOccReadings.length > 0 || 
               /saint|st\.|feast|martyr|apostle|virgin|prophet|പരിശുദ്ധ|വിശുദ്ധ|തിരുനാൾ/i.test(rawNameEn);
 
             if (isSignificant) {
@@ -525,17 +549,19 @@ export default function FeastCalendarScreen({ navigation }: any) {
                 id: `cal-occ-${dateStr}-${occIdx}`,
                 title_en: rawNameEn,
                 title_ml: rawNameMl || rawNameEn,
-                type_badge: occReadings.length > 0
+                type_badge: mergedOccReadings.length > 0
                   ? (calLang === 'ml' ? 'ബൈബിൾ വായനകൾ' : 'Scripture Readings')
                   : (calLang === 'ml' ? 'തിരുനാൾ' : 'Feast Day'),
                 isLiturgical: true,
-                isReading: occReadings.length > 0,
+                isReading: mergedOccReadings.length > 0,
                 mass_time: calLang === 'ml' ? 'തിരുവചന ശുശ്രൂഷ' : 'Liturgy of the Word',
                 location: '',
                 event_date: dateStr,
-                description_en: occReadings.length > 0 ? 'Daily Scripture & Readings' : 'Liturgical Commemoration',
-                description_ml: occReadings.length > 0 ? 'ദൈനംദിന തിരുവചന വായനകൾ' : 'തിരുനാൾ അനുസ്മരണം',
-                readings: occReadings
+                description_en: mergedOccReadings.length > 0 ? 'Daily Scripture & Readings' : 'Liturgical Commemoration',
+                description_ml: mergedOccReadings.length > 0 ? 'ദൈനംദിന തിരുവചന വായനകൾ' : 'തിരുനാൾ അനുസ്മരണം',
+                readings: mergedOccReadings,
+                massTimings: dayMassTimings,
+                mass_timings: dayMassTimings
               });
             }
           }
@@ -543,7 +569,13 @@ export default function FeastCalendarScreen({ navigation }: any) {
       }
     }
 
-    return combined;
+    return combined.map((item) => ({
+      ...item,
+      massTimings: item.massTimings || item.mass_timings || dayMassTimings,
+      mass_timings: item.mass_timings || item.massTimings || dayMassTimings,
+      scriptureReadings: item.scriptureReadings || item.scripture_readings || item.readings || [],
+      scripture_readings: item.scripture_readings || item.scriptureReadings || item.readings || [],
+    }));
   };
 
   // Generate dynamic calendar days list
@@ -761,6 +793,15 @@ export default function FeastCalendarScreen({ navigation }: any) {
             const descriptionText = calLang === 'ml' 
               ? (feastItem.description_ml || feastItem.description_en) 
               : (feastItem.description_en || feastItem.description_ml);
+            const massTimings = feastItem.massTimings || feastItem.mass_timings || [];
+            const scriptureReadings = normalizeReadings(
+              feastItem.scriptureReadings || feastItem.scripture_readings || feastItem.readings || []
+            );
+            const fallbackMassTimings = [
+              { time: '06:30 AM', language: 'Malayalam', celebrant: 'Fr. Vicar' },
+              { time: '06:00 PM', language: 'Malayalam', celebrant: 'Fr. Assistant Vicar' },
+            ];
+            const renderedMassTimings = massTimings.length > 0 ? massTimings : fallbackMassTimings;
             
             return (
               <View key={feastItem.id || index} style={[globalStyles.card, styles.eventCard]}>
@@ -813,7 +854,7 @@ export default function FeastCalendarScreen({ navigation }: any) {
                   ) : null}
 
                   {/* Scripture / Bible Readings Section */}
-                  {feastItem.readings && feastItem.readings.length > 0 && (
+                  {scriptureReadings.length > 0 && (
                     <View style={styles.readingsContainer}>
                       <View style={styles.readingsHeaderRow}>
                         <Ionicons name="book-outline" size={15} color={colors.darkGold} style={{ marginRight: 6 }} />
@@ -822,7 +863,7 @@ export default function FeastCalendarScreen({ navigation }: any) {
                         </Text>
                       </View>
                       
-                      {feastItem.readings.map((readingItem: any, rIdx: number) => {
+                      {scriptureReadings.map((readingItem: any, rIdx: number) => {
                         const citation = calLang === 'ml' 
                           ? (readingItem.citation_ml || readingItem.citation_en) 
                           : (readingItem.citation_en || readingItem.citation_ml);
@@ -844,6 +885,52 @@ export default function FeastCalendarScreen({ navigation }: any) {
                       })}
                     </View>
                   )}
+
+                  {/* MASS TIMINGS BLOCK */}
+                  <View style={styles.massBlockContainer}>
+                    <View style={styles.massBlockHeaderRow}>
+                      <Ionicons
+                        name="time-outline"
+                        size={15}
+                        color={isDark ? '#F4C430' : '#b45309'}
+                        style={{ marginRight: 6 }}
+                      />
+                      <Text style={styles.massBlockHeaderText}>
+                        Mass Timings / വിശുദ്ധ കുർബാന
+                      </Text>
+                    </View>
+
+                    <View style={styles.massBlockList}>
+                      {renderedMassTimings.map((mass: any, mIdx: number) => {
+                        const isEnglish = String(mass.language || '').toLowerCase() === 'english';
+                        return (
+                          <View key={mass.id || mIdx} style={styles.massItemCard}>
+                            <View style={styles.massItemLeft}>
+                              <Text style={styles.massTimeText}>{mass.time}</Text>
+                              <View
+                                style={[
+                                  styles.massLangBadge,
+                                  isEnglish ? styles.massLangBadgeEnglish : styles.massLangBadgeDefault,
+                                ]}
+                              >
+                                <Text
+                                  style={[
+                                    styles.massLangBadgeText,
+                                    isEnglish ? styles.massLangTextEnglish : styles.massLangTextDefault,
+                                  ]}
+                                >
+                                  {mass.language || 'Malayalam'}
+                                </Text>
+                              </View>
+                            </View>
+                            {mass.celebrant ? (
+                              <Text style={styles.massCelebrantText}>{mass.celebrant}</Text>
+                            ) : null}
+                          </View>
+                        );
+                      })}
+                    </View>
+                  </View>
                 </View>
 
               </View>
@@ -1236,6 +1323,78 @@ const getStyles = (colors: any, isDark: boolean) => StyleSheet.create({
     color: colors.textMuted,
     fontStyle: 'italic',
     marginTop: 1,
+  },
+  massBlockContainer: {
+    marginTop: 14,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: isDark ? '#2c2c2c' : 'rgba(120, 53, 15, 0.1)',
+  },
+  massBlockHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  massBlockHeaderText: {
+    fontSize: 11.5,
+    fontWeight: 'bold',
+    letterSpacing: 0.7,
+    textTransform: 'uppercase',
+    color: isDark ? '#F4C430' : 'rgba(180, 83, 9, 0.85)',
+  },
+  massBlockList: {
+    marginTop: 8,
+    gap: 8,
+  },
+  massItemCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    flexWrap: 'wrap',
+    gap: 8,
+    padding: 10,
+    borderRadius: 12,
+    backgroundColor: isDark ? 'rgba(201, 168, 76, 0.08)' : 'rgba(255, 251, 235, 0.85)',
+    borderWidth: 1,
+    borderColor: isDark ? 'rgba(201, 168, 76, 0.28)' : 'rgba(253, 230, 138, 0.75)',
+  },
+  massItemLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  massTimeText: {
+    fontSize: 13.5,
+    fontWeight: '700',
+    color: colors.foreground,
+  },
+  massLangBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 2.5,
+    borderRadius: 999,
+    borderWidth: 1,
+  },
+  massLangBadgeEnglish: {
+    backgroundColor: isDark ? 'rgba(14, 165, 233, 0.18)' : '#e0f2fe',
+    borderColor: isDark ? 'rgba(56, 189, 248, 0.35)' : '#bae6fd',
+  },
+  massLangBadgeDefault: {
+    backgroundColor: isDark ? 'rgba(245, 158, 11, 0.18)' : '#fef3c7',
+    borderColor: isDark ? 'rgba(252, 211, 77, 0.35)' : 'rgba(252, 211, 77, 0.65)',
+  },
+  massLangBadgeText: {
+    fontSize: 11,
+    fontWeight: '600',
+  },
+  massLangTextEnglish: {
+    color: isDark ? '#7dd3fc' : '#075985',
+  },
+  massLangTextDefault: {
+    color: isDark ? '#fcd34d' : '#92400e',
+  },
+  massCelebrantText: {
+    fontSize: 12,
+    fontWeight: '500',
+    color: isDark ? '#d6d3d1' : '#57534e',
   },
   noEventsText: {
     fontSize: 14,
