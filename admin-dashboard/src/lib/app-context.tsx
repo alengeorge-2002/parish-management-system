@@ -62,11 +62,20 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     "council",
   ];
 
+  const resolveRouteAlias = (rawSegment: string): string => {
+    const clean = rawSegment.toLowerCase();
+    if (clean === "religious-houses") return "houses";
+    if (clean === "parish-council") return "council";
+    return clean;
+  };
+
   const getInitialRoute = (): Route => {
     if (typeof window !== "undefined") {
-      const p = window.location.pathname.replace(/^\//, "").split("/")[0].toLowerCase();
+      const pRaw = window.location.pathname.replace(/^\//, "").split(/[/?#]/)[0];
+      const p = resolveRouteAlias(pRaw);
       if (validRoutes.includes(p as Route)) return p as Route;
-      const hash = window.location.hash.replace(/^#\/?/, "").split("/")[0].toLowerCase();
+      const hashRaw = window.location.hash.replace(/^#\/?/, "").split(/[/?#]/)[0];
+      const hash = resolveRouteAlias(hashRaw);
       if (validRoutes.includes(hash as Route)) return hash as Route;
     }
     return "dashboard";
@@ -97,7 +106,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     if (typeof window === "undefined") return;
 
     const handlePopState = (e: PopStateEvent) => {
-      const p = window.location.pathname.replace(/^\//, "").split("/")[0].toLowerCase();
+      const pRaw = window.location.pathname.replace(/^\//, "").split(/[/?#]/)[0];
+      const p = resolveRouteAlias(pRaw);
       if (validRoutes.includes(p as Route)) {
         setRoute(p as Route);
       }
@@ -113,7 +123,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   const navigate = (to: string, options?: { state?: any }) => {
     const cleanPath = to.startsWith("/") ? to : `/${to}`;
-    const target = cleanPath.replace(/^\//, "").split("/")[0].toLowerCase();
+    const targetRaw = cleanPath.replace(/^\//, "").split(/[/?#]/)[0];
+    const target = resolveRouteAlias(targetRaw);
 
     if (typeof window !== "undefined") {
       try {

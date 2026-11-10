@@ -390,3 +390,17 @@ export const parishCouncilApi = {
   }),
 };
 
+export interface GlobalSearchResult {
+  id: string;
+  title: string;
+  subtitle: string;
+  contact: string;
+  category: string;
+  route: string;
+}
+
+export const searchApi = {
+  query: (q: string): Promise<GlobalSearchResult[]> =>
+    fetchApi(`/search?q=${encodeURIComponent(q)}`),
+};
+

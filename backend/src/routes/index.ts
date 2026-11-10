@@ -31,6 +31,7 @@ import { createClergy, updateClergy, deleteClergy } from '../controllers/admin-c
 import { getAllReligiousHouses } from '../controllers/religious-house-controller';
 import { getMinistriesDirectory } from '../controllers/ministry-controller';
 import { search } from '../controllers/directory-controller';
+import { universalSearch } from '../controllers/search-controller';
 import { getQuickContacts } from '../controllers/parish-council-controller';
 import { validateCreateFamily, validateCreateMember } from '../middleware/validate';
 import { uploadFamilyPhoto, uploadClergyPhoto } from '../middleware/upload-middleware';
@@ -92,6 +93,7 @@ router.get('/health', (_req, res) => {
   res.status(200).json({ status: 'ok', uptime: process.uptime(), timestamp: new Date().toISOString() });
 });
 router.get('/parishioners', search);
+router.get('/search', universalSearch);
 
 // Module routers
 router.use('/auth', authRouter);
