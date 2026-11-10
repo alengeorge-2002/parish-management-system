@@ -21,9 +21,19 @@ router.get('/directory/ministries', getMinistriesDirectory);
 router.get('/ministries', getMinistriesDirectory);
 router.get('/', getMinistriesDirectory);
 
+// Direct CRUD routes (supporting /api/ministries)
+router.post('/ministries', requireAuth, requireAdmin, createMinistry);
+router.post('/', requireAuth, requireAdmin, createMinistry);
+router.put('/ministries/:id', requireAuth, requireAdmin, updateMinistry);
+router.put('/:id', requireAuth, requireAdmin, updateMinistry);
+router.delete('/ministries/:id', requireAuth, requireAdmin, deleteMinistry);
+router.delete('/:id', requireAuth, requireAdmin, deleteMinistry);
+
 // Direct ministry member management routes (supporting /api/ministries/:id/members)
 router.post('/ministries/:id/members', addMemberToMinistry);
+router.post('/:id/members', addMemberToMinistry);
 router.delete('/ministries/:id/members/:memberId', removeMemberFromMinistry);
+router.delete('/:id/members/:memberId', removeMemberFromMinistry);
 
 // Admin-protected CRUD routes
 router.get('/admin/ministries', requireAuth, requireAdmin, getAllMinistriesAdmin);

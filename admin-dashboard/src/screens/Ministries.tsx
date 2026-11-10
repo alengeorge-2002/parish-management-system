@@ -44,6 +44,18 @@ export default function Ministries() {
   const [cat, setCat] = useState<(typeof CATS)[number]>("All");
   const [ministriesList, setMinistriesList] = useState<any[]>([]);
 
+  // Add Ministry Modal States
+  const [isAddMinistryModalOpen, setIsAddMinistryModalOpen] = useState(false);
+  const [savingMinistry, setSavingMinistry] = useState(false);
+  const [ministryError, setMinistryError] = useState("");
+  const [ministryForm, setMinistryForm] = useState({
+    name: "",
+    category: "Liturgical" as Ministry["category"],
+    coordinator: "",
+    phone: "",
+    meets: "",
+  });
+
   // Roster Drawer States
   const [selectedMinistryForDetails, setSelectedMinistryForDetails] = useState<any | null>(null);
   const [ministryMembers, setMinistryMembers] = useState<RosterItem[]>([]);
@@ -73,7 +85,7 @@ export default function Ministries() {
             phone: m.phone || m.phone_number || "",
             members: m.member_count || (m.members ? m.members.length : 0),
             category: m.category || "Liturgical",
-            meets: m.meets || m.meeting_time || "",
+            meets: m.meets || m.meeting_time || m.description || "",
             rawMembers: m.members || [],
             raw: m,
           }))
@@ -188,6 +200,50 @@ export default function Ministries() {
     }
   };
 
+  const handleOpenAddMinistry = () => {
+    setMinistryForm({
+      name: "",
+      category: cat !== "All" ? cat : "Liturgical",
+      coordinator: "",
+      phone: "",
+      meets: "",
+    });
+    setMinistryError("");
+    setIsAddMinistryModalOpen(true);
+  };
+
+  const handleCreateMinistrySubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!ministryForm.name.trim()) {
+      setMinistryError("Ministry name is required");
+      return;
+    }
+    setMinistryError("");
+    setSavingMinistry(true);
+    try {
+      await ministriesApi.create({
+        title: ministryForm.name.trim(),
+        name: ministryForm.name.trim(),
+        category: ministryForm.category,
+        ministry_category: ministryForm.category,
+        coordinator: ministryForm.coordinator.trim(),
+        phone: ministryForm.phone.trim(),
+        meets: ministryForm.meets.trim(),
+        meeting_time: ministryForm.meets.trim(),
+        description: ministryForm.meets.trim(),
+      });
+      toast(`Ministry "${ministryForm.name.trim()}" registered`);
+      setIsAddMinistryModalOpen(false);
+      await loadData();
+    } catch (err: any) {
+      console.error("Failed to create ministry:", err);
+      setMinistryError(err.message || "Failed to create ministry");
+      toast(err.message || "Failed to create ministry");
+    } finally {
+      setSavingMinistry(false);
+    }
+  };
+
   return (
     <div className="space-y-5">
       <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
@@ -213,68 +269,90 @@ export default function Ministries() {
               {totalMembers.toLocaleString()}
             </span>
           </span>
-          <Button onClick={() => toast(lang === "en" ? "Ministry form opened" : "ഫോം തുറന്നു")}>
+          <Button onClick={handleOpenAddMinistry}>
             <Plus className="h-4 w-4" />
             {lang === "en" ? "Add Ministry" : "സേവനം ചേർക്കുക"}
           </Button>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
-        {filtered.map((m) => {
-          const Icon = catIcon[m.category] || Church;
-          return (
-            <Card
-              key={m.id}
-              glow
-              className="p-5 cursor-pointer transition-all hover:border-primary/50 hover:shadow-lg"
-              onClick={() => handleOpenMinistryDetails(m)}
-            >
-              <div className="flex items-start justify-between">
-                <div className="flex h-10 w-10 items-center justify-center rounded-[10px] bg-primary/12 text-primary">
-                  <Icon className="h-5 w-5" />
-                </div>
-                <Pill tone={catTone[m.category] || "gold"}>{m.category}</Pill>
-              </div>
-              <h3 className="mt-3 font-display text-[15px] font-semibold text-foreground">
-                {m.name}
-              </h3>
-              {m.nameMl && <div className="font-malayalam text-[12px] text-muted-foreground">{m.nameMl}</div>}
-
-              <div className="mt-3 space-y-1.5 text-[12px]">
-                <div className="flex items-center gap-2 text-muted-foreground">
-                  <Users className="h-3.5 w-3.5 text-primary" />
-                  <span className="font-semibold text-foreground">{m.members}</span>{" "}
-                  {lang === "en" ? "members" : "അംഗങ്ങൾ"}
-                </div>
-                <div className="flex items-center gap-2 text-muted-foreground">
-                  <CalendarClock className="h-3.5 w-3.5" />
-                  {m.meets}
-                </div>
-              </div>
-
-              <div className="mt-3 flex items-center justify-between border-t border-border pt-3 text-[12px]">
-                <div>
-                  <div className="text-[11px] text-muted-foreground">
-                    {lang === "en" ? "Coordinator" : "ഏകോപകൻ"}
+      {filtered.length === 0 ? (
+        <Card className="p-10 flex flex-col items-center justify-center text-center bg-[#181b22] border border-zinc-800 rounded-2xl">
+          <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-[#F4C430]/10 border border-[#F4C430]/20 text-[#F4C430] mb-4">
+            <Users className="h-7 w-7" />
+          </div>
+          <h3 className="font-display text-lg font-semibold text-foreground">
+            {ministriesList.length === 0
+              ? "No Ministries Registered"
+              : `No Ministries in ${cat}`}
+          </h3>
+          <p className="mt-1.5 max-w-md text-[13px] text-muted-foreground">
+            {ministriesList.length === 0
+              ? "Click '+ Add Ministry' above to create your parish's first ministry or committee."
+              : `No ministries are currently listed under the ${cat} category. Try switching categories or add a new ministry.`}
+          </p>
+        </Card>
+      ) : (
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
+          {filtered.map((m) => {
+            const Icon = catIcon[m.category as Ministry["category"]] || Church;
+            return (
+              <Card
+                key={m.id}
+                glow
+                className="p-5 cursor-pointer transition-all hover:border-primary/50 hover:shadow-lg"
+                onClick={() => handleOpenMinistryDetails(m)}
+              >
+                <div className="flex items-start justify-between">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-[10px] bg-primary/12 text-primary">
+                    <Icon className="h-5 w-5" />
                   </div>
-                  <div className="font-medium text-foreground">{m.coordinator}</div>
+                  <Pill tone={catTone[m.category as Ministry["category"]] || "gold"}>{m.category}</Pill>
                 </div>
-                <div className="flex items-center gap-1">
-                  <a
-                    href={`tel:${m.phone}`}
-                    onClick={(e) => e.stopPropagation()}
-                    title="Call Coordinator"
-                    className="inline-flex h-8 w-8 items-center justify-center rounded-[8px] text-info hover:bg-info/12"
-                  >
-                    <Phone className="h-4 w-4" />
-                  </a>
+                <h3 className="mt-3 font-display text-[15px] font-semibold text-foreground">
+                  {m.name}
+                </h3>
+                {m.nameMl && <div className="font-malayalam text-[12px] text-muted-foreground">{m.nameMl}</div>}
+
+                <div className="mt-3 space-y-1.5 text-[12px]">
+                  <div className="flex items-center gap-2 text-muted-foreground">
+                    <Users className="h-3.5 w-3.5 text-primary" />
+                    <span className="font-semibold text-foreground">{m.members}</span>{" "}
+                    {lang === "en" ? "members" : "അംഗങ്ങൾ"}
+                  </div>
+                  {m.meets && (
+                    <div className="flex items-center gap-2 text-muted-foreground">
+                      <CalendarClock className="h-3.5 w-3.5 shrink-0" />
+                      <span className="truncate">{m.meets}</span>
+                    </div>
+                  )}
                 </div>
-              </div>
-            </Card>
-          );
-        })}
-      </div>
+
+                <div className="mt-3 flex items-center justify-between border-t border-border pt-3 text-[12px]">
+                  <div>
+                    <div className="text-[11px] text-muted-foreground">
+                      {lang === "en" ? "Coordinator" : "ഏകോപകൻ"}
+                    </div>
+                    <div className="font-medium text-foreground">{m.coordinator || "—"}</div>
+                  </div>
+                  {m.phone && (
+                    <div className="flex items-center gap-1">
+                      <a
+                        href={`tel:${m.phone}`}
+                        onClick={(e) => e.stopPropagation()}
+                        title="Call Coordinator"
+                        className="inline-flex h-8 w-8 items-center justify-center rounded-[8px] text-info hover:bg-info/12"
+                      >
+                        <Phone className="h-4 w-4" />
+                      </a>
+                    </div>
+                  )}
+                </div>
+              </Card>
+            );
+          })}
+        </div>
+      )}
 
       {/* Roster Drawer for Selected Ministry */}
       {selectedMinistryForDetails && (
@@ -408,6 +486,126 @@ export default function Ministries() {
           </Field>
         </div>
       </Modal>
+
+      {/* Add Ministry Modal */}
+      {isAddMinistryModalOpen && (
+        <div
+          className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+          onClick={() => !savingMinistry && setIsAddMinistryModalOpen(false)}
+        >
+          <div
+            className="bg-[#181b22] border border-zinc-800 rounded-2xl w-full max-w-lg p-6 shadow-2xl z-50"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between pb-4 border-b border-zinc-800">
+              <div>
+                <h3 className="font-display text-lg font-semibold text-foreground">
+                  {lang === "en" ? "Add Ministry" : "സേവനം ചേർക്കുക"}
+                </h3>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  Create a new parish ministry, committee, or pious association
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => !savingMinistry && setIsAddMinistryModalOpen(false)}
+                className="text-zinc-400 hover:text-foreground text-sm font-semibold p-1 cursor-pointer"
+                aria-label="Close modal"
+              >
+                ✕
+              </button>
+            </div>
+
+            <form onSubmit={handleCreateMinistrySubmit} className="mt-4 space-y-4">
+              <Field label="Ministry Name *">
+                <Input
+                  placeholder="e.g. Altar Servers, Youth Choir, St. Vincent de Paul"
+                  value={ministryForm.name}
+                  onChange={(e) => {
+                    setMinistryForm({ ...ministryForm, name: e.target.value });
+                    if (ministryError) setMinistryError("");
+                  }}
+                  autoFocus
+                  className="bg-[#141414] border-zinc-800"
+                />
+              </Field>
+
+              <Field label="Category">
+                <Select
+                  value={ministryForm.category}
+                  onChange={(e) =>
+                    setMinistryForm({
+                      ...ministryForm,
+                      category: e.target.value as Ministry["category"],
+                    })
+                  }
+                  className="bg-[#141414] border-zinc-800"
+                >
+                  <option value="Liturgical">Liturgical</option>
+                  <option value="Youth">Youth</option>
+                  <option value="Charity">Charity</option>
+                  <option value="Catechetical">Catechetical</option>
+                  <option value="Devotional">Devotional</option>
+                </Select>
+              </Field>
+
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <Field label="Coordinator / Lead Name">
+                  <Input
+                    placeholder="e.g. Thomas Sebastian"
+                    value={ministryForm.coordinator}
+                    onChange={(e) =>
+                      setMinistryForm({ ...ministryForm, coordinator: e.target.value })
+                    }
+                    className="bg-[#141414] border-zinc-800"
+                  />
+                </Field>
+                <Field label="Phone Number">
+                  <Input
+                    placeholder="+91 98450 00000"
+                    value={ministryForm.phone}
+                    onChange={(e) =>
+                      setMinistryForm({ ...ministryForm, phone: e.target.value })
+                    }
+                    className="bg-[#141414] border-zinc-800"
+                  />
+                </Field>
+              </div>
+
+              <Field label="Description / Meeting Schedule">
+                <textarea
+                  rows={3}
+                  placeholder="e.g. Every Sunday at 9:30 AM in Parish Hall"
+                  value={ministryForm.meets}
+                  onChange={(e) =>
+                    setMinistryForm({ ...ministryForm, meets: e.target.value })
+                  }
+                  className="w-full rounded-[8px] border border-zinc-800 bg-[#141414] px-3 py-2 text-[13px] text-foreground placeholder:text-muted-foreground/70 focus:border-[#F4C430]/60 focus:outline-none"
+                />
+              </Field>
+
+              {ministryError && (
+                <p className="text-xs text-rose-400 font-medium">{ministryError}</p>
+              )}
+
+              <div className="flex justify-end gap-2 pt-3 border-t border-zinc-800">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  onClick={() => setIsAddMinistryModalOpen(false)}
+                  disabled={savingMinistry}
+                >
+                  Cancel
+                </Button>
+                <Button type="submit" disabled={savingMinistry}>
+                  <Check className="h-4 w-4" />
+                  {savingMinistry ? "Creating..." : "Create Ministry"}
+                </Button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

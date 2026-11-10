@@ -347,8 +347,8 @@ export const calendarApi = {
 };
 
 export const ministriesApi = {
-  list: () => fetchApi('/directory/ministries'),
-  create: (data: any) => fetchApi('/admin/ministries', {
+  list: () => fetchApi('/ministries'),
+  create: (data: any) => fetchApi('/ministries', {
     method: 'POST',
     body: JSON.stringify(data),
   }),

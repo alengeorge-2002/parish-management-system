@@ -7,26 +7,59 @@ const parseId = (val: any): number | null => {
   return isNaN(num) ? null : num;
 };
 
+let ministriesSchemaEnsured = false;
+export const ensureMinistriesSchema = async () => {
+  if (ministriesSchemaEnsured) return;
+  try {
+    await pool.query(`
+      ALTER TABLE organizations ADD COLUMN IF NOT EXISTS ministry_category VARCHAR(100) DEFAULT 'Liturgical';
+      ALTER TABLE organizations ADD COLUMN IF NOT EXISTS coordinator VARCHAR(150);
+      ALTER TABLE organizations ADD COLUMN IF NOT EXISTS phone VARCHAR(50);
+      ALTER TABLE organizations ADD COLUMN IF NOT EXISTS meeting_time VARCHAR(255);
+    `);
+    ministriesSchemaEnsured = true;
+  } catch (err) {
+    console.warn('ensureMinistriesSchema notice:', err);
+  }
+};
+
+const mapMinistryRow = (mObj: any) => {
+  const members = Array.isArray(mObj.members) ? mObj.members : [];
+  const subCat =
+    mObj.ministry_category ||
+    (mObj.category && mObj.category.toLowerCase() !== 'ministry' ? mObj.category : 'Liturgical');
+  return {
+    ...mObj,
+    id: String(mObj.id),
+    _id: String(mObj.id),
+    title: mObj.title || mObj.name_en || '',
+    name: mObj.title || mObj.name_en || '',
+    name_en: mObj.name_en || mObj.title || '',
+    name_ml: mObj.name_ml || '',
+    nameMl: mObj.name_ml || '',
+    category: subCat,
+    ministry_category: subCat,
+    coordinator: mObj.coordinator || '',
+    phone: mObj.phone || '',
+    meets: mObj.meeting_time || mObj.description || '',
+    meeting_time: mObj.meeting_time || '',
+    description: mObj.description || mObj.meeting_time || '',
+    member_count: members.length,
+    members,
+  };
+};
+
 /**
  * Public directory: Fetches all ministries with their aggregated counts and members
  */
 export const getMinistriesDirectory = async (_req: Request, res: Response) => {
   try {
+    await ensureMinistriesSchema();
     const result = await pool.query(
       `SELECT *, id as _id FROM organizations WHERE category = 'ministry' ORDER BY title ASC, name_en ASC`
     );
 
-    const mapped = result.rows.map((mObj: any) => {
-      const members = Array.isArray(mObj.members) ? mObj.members : [];
-      return {
-        ...mObj,
-        id: String(mObj.id),
-        _id: String(mObj.id),
-        title: mObj.title || mObj.name_en || '',
-        member_count: members.length,
-        members,
-      };
-    });
+    const mapped = result.rows.map(mapMinistryRow);
 
     res.json(mapped);
   } catch (err: any) {
@@ -39,14 +72,11 @@ export const getMinistriesDirectory = async (_req: Request, res: Response) => {
  */
 export const getAllMinistriesAdmin = async (_req: Request, res: Response) => {
   try {
+    await ensureMinistriesSchema();
     const result = await pool.query(
       `SELECT *, id as _id FROM organizations WHERE category = 'ministry' ORDER BY title ASC, name_en ASC`
     );
-    const mapped = result.rows.map((row: any) => ({
-      ...row,
-      id: String(row.id),
-      _id: String(row.id),
-    }));
+    const mapped = result.rows.map(mapMinistryRow);
     res.json(mapped);
   } catch (err: any) {
     res.status(500).json({ error: err.message });
@@ -57,20 +87,59 @@ export const getAllMinistriesAdmin = async (_req: Request, res: Response) => {
  * Admin: Create a new ministry
  */
 export const createMinistry = async (req: Request, res: Response): Promise<any> => {
-  const { title, name_en, description, icon_symbol } = req.body;
-  const ministryTitle = title || name_en;
+  const {
+    title,
+    name,
+    name_en,
+    name_ml,
+    nameMl,
+    category,
+    ministry_category,
+    coordinator,
+    phone,
+    phone_number,
+    meets,
+    meeting_time,
+    meetingSchedule,
+    description,
+    icon_symbol,
+  } = req.body;
+
+  const ministryTitle = (title || name || name_en || '').trim();
   if (!ministryTitle) {
-    return res.status(400).json({ error: 'Title is required' });
+    return res.status(400).json({ error: 'Ministry name is required' });
   }
+
+  const subCat =
+    ministry_category ||
+    (category && category.toLowerCase() !== 'ministry' ? category : 'Liturgical');
+  const schedule = meeting_time || meets || meetingSchedule || description || '';
+  const desc = description || schedule || null;
+  const mlName = name_ml || nameMl || null;
+  const leadPhone = phone || phone_number || null;
+
   try {
+    await ensureMinistriesSchema();
     const result = await pool.query(
-      `INSERT INTO organizations (category, title, name_en, description, icon_symbol, members)
-       VALUES ('ministry', $1, $1, $2, $3, '[]'::jsonb)
+      `INSERT INTO organizations (
+         category, title, name_en, name_ml, description, icon_symbol,
+         ministry_category, coordinator, phone, meeting_time, members
+       )
+       VALUES ('ministry', $1, $1, $2, $3, $4, $5, $6, $7, $8, '[]'::jsonb)
        RETURNING *, id as _id`,
-      [ministryTitle.trim(), description || null, icon_symbol || null]
+      [
+        ministryTitle,
+        mlName,
+        desc,
+        icon_symbol || null,
+        subCat,
+        coordinator || null,
+        leadPhone,
+        schedule || null,
+      ]
     );
-    const row = result.rows[0];
-    res.status(201).json({ ...row, id: String(row.id), _id: String(row.id) });
+    const row = mapMinistryRow(result.rows[0]);
+    res.status(201).json(row);
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }
@@ -83,24 +152,63 @@ export const updateMinistry = async (req: Request, res: Response): Promise<any> 
   const id = parseId(req.params.id);
   if (!id) return res.status(400).json({ error: 'Valid id required' });
 
-  const { title, name_en, description, icon_symbol } = req.body;
-  const ministryTitle = title || name_en;
+  const {
+    title,
+    name,
+    name_en,
+    name_ml,
+    nameMl,
+    category,
+    ministry_category,
+    coordinator,
+    phone,
+    phone_number,
+    meets,
+    meeting_time,
+    meetingSchedule,
+    description,
+    icon_symbol,
+  } = req.body;
+
+  const ministryTitle = (title || name || name_en || '').trim();
   if (!ministryTitle) {
-    return res.status(400).json({ error: 'Title is required' });
+    return res.status(400).json({ error: 'Ministry name is required' });
   }
+
+  const subCat =
+    ministry_category ||
+    (category && category.toLowerCase() !== 'ministry' ? category : 'Liturgical');
+  const schedule = meeting_time || meets || meetingSchedule || description || '';
+  const desc = description || schedule || null;
+  const mlName = name_ml || nameMl || null;
+  const leadPhone = phone || phone_number || null;
+
   try {
+    await ensureMinistriesSchema();
     const result = await pool.query(
       `UPDATE organizations SET
-         title = $1, name_en = $1, description = $2, icon_symbol = $3
-       WHERE id = $4
+         title = $1, name_en = $1, name_ml = COALESCE($2, name_ml),
+         description = $3, icon_symbol = COALESCE($4, icon_symbol),
+         ministry_category = $5, coordinator = $6, phone = $7, meeting_time = $8
+       WHERE id = $9
        RETURNING *, id as _id`,
-      [ministryTitle.trim(), description || null, icon_symbol || null, id]
+      [
+        ministryTitle,
+        mlName,
+        desc,
+        icon_symbol || null,
+        subCat,
+        coordinator || null,
+        leadPhone,
+        schedule || null,
+        id,
+      ]
     );
     if (result.rows.length === 0) {
       return res.status(404).json({ error: 'Ministry not found' });
     }
-    const row = result.rows[0];
-    res.json({ ...row, id: String(row.id), _id: String(row.id) });
+    const row = mapMinistryRow(result.rows[0]);
+    res.json(row);
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }
