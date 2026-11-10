@@ -6,6 +6,7 @@ import { connectDB, pool } from './config/db';
 import fs from 'fs';
 import path from 'path';
 import { seedDefaultUsersAndDependencies } from './scripts/seed-default-users';
+import { ensureCouncilSeatsSeeded } from './controllers/parish-council-controller';
 
 const port = process.env.PORT || 5000;
 
@@ -140,6 +141,9 @@ export const autoInitializeDb = async () => {
 
     // 6. Ensure exactly the default active users (admin123, user123) and isolate mock accounts
     await seedDefaultUsersAndDependencies();
+
+    // 7. Seed designated vacant Parish Council seats (12 executive + 1 per registered ward)
+    await ensureCouncilSeatsSeeded(true);
   } catch (err) {
     console.warn('Database auto-initialization notice:', err);
   }

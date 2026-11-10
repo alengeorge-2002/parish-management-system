@@ -334,6 +334,21 @@ export const createWard = async (req: Request, res: Response): Promise<any> => {
     );
 
     const row = result.rows[0];
+    // Dynamically create 1 vacant representative seat for the newly created ward
+    try {
+      const seatTitle = `Ward #${row.ward_number || row.id} Representative (${row.ward_name}) / വാർഡ് കൗൺസിലർ`;
+      const orderNum = 100 + (parseInt(String(row.ward_number || row.id), 10) || Number(row.id));
+      await pool.query(
+        `INSERT INTO parish_council (
+           role_title, committee_type, ward_id, member_id,
+           occupant_name, phone, term, status, display_order
+         ) VALUES ($1, 'ward_rep', $2, NULL, NULL, NULL, '2025 – 2027', 'vacant', $3)`,
+        [seatTitle, row.id, orderNum]
+      );
+    } catch (_) {
+      // Ignore if parish_council not yet initialized
+    }
+
     res.status(201).json({
       ...row,
       id: String(row.id),

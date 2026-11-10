@@ -7,7 +7,8 @@ import {
   StyleSheet, 
   Platform, 
   Alert, 
-  Linking 
+  Linking,
+  ActivityIndicator
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
@@ -17,29 +18,36 @@ import { useTheme } from '../styles/theme-context';
 import { useLanguage } from '../localization/language-context';
 import { API_BASE_URL, apiFetch } from '../config';
 
-interface CouncilMember {
+interface CouncilSeat {
   id: string;
-  nameKey: string;
-  roleKey: string;
-  designationKey: string;
+  seatTitle: string;
+  name: string;
+  houseName: string;
+  wardName: string;
+  wardNumber: number | string | null;
   phone: string;
   email: string;
+  status: 'filled' | 'vacant';
+  category: 'executive' | 'ward_rep';
   avatar: string;
 }
 
 export default function ParishCouncilScreen() {
   const { colors, isDark } = useTheme();
   const styles = getStyles(colors, isDark);
-  const { t } = useLanguage();
+  const { t, language } = useLanguage();
   const navigation = useNavigation();
   const [activeTab, setActiveTab] = useState<'representatives' | 'executive'>('representatives');
-  const [liveCouncilData, setLiveCouncilData] = useState<{ executive: CouncilMember[]; representatives: CouncilMember[] }>({ executive: [], representatives: [] });
+  const [liveCouncilData, setLiveCouncilData] = useState<{ executive: CouncilSeat[]; representatives: CouncilSeat[] }>({ executive: [], representatives: [] });
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const fetchCouncil = async () => {
       try {
-        const response = await apiFetch(`${API_BASE_URL}/api/directory/parish-council`);
+        let response = await apiFetch(`${API_BASE_URL}/api/parish-council/seats`);
+        if (!response.ok) {
+          response = await apiFetch(`${API_BASE_URL}/api/directory/parish-council`);
+        }
         if (response.ok) {
           const list: any[] = await response.json();
           if (Array.isArray(list)) {
@@ -52,27 +60,44 @@ export default function ParishCouncilScreen() {
               return parts[0] ? parts[0][0].toUpperCase() : '';
             };
 
-            const executive: CouncilMember[] = [];
-            const representatives: CouncilMember[] = [];
+            const executive: CouncilSeat[] = [];
+            const representatives: CouncilSeat[] = [];
 
             list.forEach(item => {
               const firstName = item.first_name || item.firstName || '';
               const lastName = item.last_name || item.lastName || '';
-              const fullName = `${firstName} ${lastName}`.trim() || item.occupantName || item.holder || 'Council Member';
-              const member: CouncilMember = {
+              const resolvedName =
+                item.occupant_name ||
+                item.occupantName ||
+                `${firstName} ${lastName}`.trim() ||
+                '';
+              const isFilled =
+                Boolean(item.member_id) &&
+                item.status === 'filled' &&
+                Boolean(resolvedName);
+              const rawTitle = item.seat_title || item.role_title || item.roleTitle || item.seat || 'Council Seat';
+              const isExec =
+                (item.category || '').toLowerCase() === 'executive' ||
+                (item.committee_type || '').toLowerCase() === 'executive';
+
+              const seat: CouncilSeat = {
                 id: (item.id || item._id || '').toString(),
-                nameKey: fullName,
-                roleKey: item.role_title || item.roleTitle || item.seat || 'Council Member',
-                designationKey: item.role_title || item.roleTitle || item.seat || 'Council Member',
-                phone: item.phone_number || item.phone || '',
-                email: item.email || '',
-                avatar: getInitials(fullName)
+                seatTitle: rawTitle,
+                name: isFilled ? resolvedName : '',
+                houseName: isFilled ? (item.house_name || item.houseName || '') : '',
+                wardName: item.ward_name || item.wardName || '',
+                wardNumber: item.ward_number ?? item.wardNumber ?? null,
+                phone: isFilled ? (item.phone || item.phone_number || '') : '',
+                email: isFilled ? (item.email || '') : '',
+                status: isFilled ? 'filled' : 'vacant',
+                category: isExec ? 'executive' : 'ward_rep',
+                avatar: isFilled ? getInitials(resolvedName) : '',
               };
 
-              if (item.committee_type === 'executive' || item.category === 'Executive') {
-                executive.push(member);
+              if (isExec) {
+                executive.push(seat);
               } else {
-                representatives.push(member);
+                representatives.push(seat);
               }
             });
 
@@ -159,45 +184,118 @@ export default function ParishCouncilScreen() {
 
       {/* Council Members List */}
       <ScrollView contentContainerStyle={styles.scrollContainer} showsVerticalScrollIndicator={false}>
-        {currentMembers.map((member) => {
-          const name = t(member.nameKey);
-          return (
-            <View key={member.id} style={[globalStyles.card, styles.memberCard]}>
-              {/* Left Margin Avatar */}
-              <View style={styles.avatarCircle}>
-                <Text style={styles.avatarInitials}>{member.avatar}</Text>
-              </View>
+        {loading ? (
+          <View style={styles.loadingState}>
+            <ActivityIndicator size="large" color={colors.primary} />
+          </View>
+        ) : currentMembers.length === 0 ? (
+          <View style={[globalStyles.card, styles.emptyCard]}>
+            <Ionicons name="people-outline" size={32} color={colors.mutedBrown} />
+            <Text style={styles.emptyCardTitle}>
+              {language === 'ml' ? 'കൗൺസിൽ സീറ്റുകൾ ഒന്നും ലഭ്യമല്ല' : 'No council seats listed yet'}
+            </Text>
+          </View>
+        ) : (
+          currentMembers.map((seat) => {
+            const isFilled = seat.status === 'filled';
+            const wardHeaderLabel = seat.wardName
+              ? `Ward #${seat.wardNumber || ''} · ${seat.wardName}`
+              : t(seat.seatTitle);
 
-              {/* Text Info */}
-              <View style={styles.textContainer}>
-                <Text numberOfLines={1} style={styles.memberName}>{name}</Text>
-                <Text numberOfLines={2} style={styles.memberRole}>
-                  {t(member.designationKey)}
-                </Text>
-              </View>
+            return (
+              <View key={seat.id} style={[globalStyles.card, styles.memberCard]}>
+                {/* Left Margin Avatar */}
+                <View style={isFilled ? styles.avatarCircle : styles.vacantAvatarCircle}>
+                  {isFilled ? (
+                    <Text style={styles.avatarInitials}>{seat.avatar}</Text>
+                  ) : (
+                    <Ionicons name="person-outline" size={20} color={colors.mutedBrown} />
+                  )}
+                </View>
 
-              {/* Far Right Action Buttons */}
-              <View style={styles.rowActionBtnGroup}>
-                <TouchableOpacity 
-                  style={styles.actionIconButton}
-                  onPress={() => handlePhonePress(member.phone, name)}
-                  accessibilityLabel={`Call ${name}`}
-                  accessibilityRole="button"
-                >
-                  <Ionicons name="call-outline" size={20} color={colors.error} />
-                </TouchableOpacity>
-                <TouchableOpacity 
-                  style={styles.actionIconButton}
-                  onPress={() => handleEmailPress(member.email, name)}
-                  accessibilityLabel={`Email ${name}`}
-                  accessibilityRole="button"
-                >
-                  <Ionicons name="mail-outline" size={20} color={colors.error} />
-                </TouchableOpacity>
+                {/* Text Info */}
+                <View style={styles.textContainer}>
+                  {isFilled ? (
+                    <>
+                      {activeTab === 'representatives' ? (
+                        <>
+                          <Text numberOfLines={1} style={styles.wardLabelText}>
+                            {wardHeaderLabel}
+                          </Text>
+                          <Text numberOfLines={1} style={styles.memberName}>
+                            {t(seat.name)}
+                          </Text>
+                          {seat.houseName ? (
+                            <Text numberOfLines={1} style={styles.memberHouse}>
+                              {seat.houseName}
+                            </Text>
+                          ) : null}
+                        </>
+                      ) : (
+                        <>
+                          <Text numberOfLines={2} style={styles.wardLabelText}>
+                            {t(seat.seatTitle)}
+                          </Text>
+                          <Text numberOfLines={1} style={styles.memberName}>
+                            {t(seat.name)}
+                          </Text>
+                          {seat.houseName ? (
+                            <Text numberOfLines={1} style={styles.memberHouse}>
+                              {seat.houseName}
+                            </Text>
+                          ) : null}
+                        </>
+                      )}
+                    </>
+                  ) : (
+                    <>
+                      <Text numberOfLines={2} style={styles.vacantSeatTitle}>
+                        {activeTab === 'representatives' && seat.wardName
+                          ? `Ward #${seat.wardNumber || ''} · ${seat.wardName}`
+                          : t(seat.seatTitle)}
+                      </Text>
+                      {activeTab === 'representatives' && (
+                        <Text numberOfLines={1} style={styles.memberRole}>
+                          {t(seat.seatTitle)}
+                        </Text>
+                      )}
+                    </>
+                  )}
+                </View>
+
+                {/* Far Right Action Buttons or Vacant Badge */}
+                {isFilled ? (
+                  <View style={styles.rowActionBtnGroup}>
+                    {seat.phone ? (
+                      <TouchableOpacity
+                        style={styles.actionIconButton}
+                        onPress={() => handlePhonePress(seat.phone, seat.name)}
+                        accessibilityLabel={`Call ${seat.name}`}
+                        accessibilityRole="button"
+                      >
+                        <Ionicons name="call-outline" size={20} color={colors.error} />
+                      </TouchableOpacity>
+                    ) : null}
+                    {seat.email ? (
+                      <TouchableOpacity
+                        style={styles.actionIconButton}
+                        onPress={() => handleEmailPress(seat.email, seat.name)}
+                        accessibilityLabel={`Email ${seat.name}`}
+                        accessibilityRole="button"
+                      >
+                        <Ionicons name="mail-outline" size={20} color={colors.error} />
+                      </TouchableOpacity>
+                    ) : null}
+                  </View>
+                ) : (
+                  <View style={styles.vacantBadge}>
+                    <Text style={styles.vacantBadgeText}>Vacant / ഒഴിവ്</Text>
+                  </View>
+                )}
               </View>
-            </View>
-          );
-        })}
+            );
+          })
+        )}
       </ScrollView>
     </SafeAreaView>
   );
@@ -324,6 +422,17 @@ const getStyles = (colors: any, isDark: boolean) => StyleSheet.create({
     borderWidth: 1.5,
     borderColor: colors.primary, // Gold border accent
   },
+  vacantAvatarCircle: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: isDark ? '#25221d' : '#f5ebd6',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 14,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
   avatarInitials: {
     fontSize: 14,
     fontWeight: 'bold',
@@ -335,17 +444,71 @@ const getStyles = (colors: any, isDark: boolean) => StyleSheet.create({
     justifyContent: 'center',
     marginRight: 8,
   },
+  wardLabelText: {
+    fontSize: 11,
+    fontWeight: 'bold',
+    color: colors.darkGold,
+    marginBottom: 2,
+    fontFamily: Platform.OS === 'web' ? '"Noto Serif Malayalam", sans-serif' : 'NotoSerifMalayalam-SemiBold',
+  },
   memberName: {
     fontSize: 15,
     fontWeight: 'bold',
     color: colors.foreground,
     fontFamily: Platform.OS === 'web' ? '"Noto Serif Malayalam", serif' : 'NotoSerifMalayalam-Bold',
   },
+  memberHouse: {
+    fontSize: 12,
+    color: colors.mediumBrown,
+    marginTop: 2,
+    fontFamily: Platform.OS === 'web' ? 'Nunito, sans-serif' : 'System',
+  },
   memberRole: {
     fontSize: 11,
     color: colors.textMuted,
     marginTop: 2,
     fontFamily: Platform.OS === 'web' ? '"Noto Serif Malayalam", serif' : 'NotoSerifMalayalam-Regular',
+  },
+  vacantSeatTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: colors.foreground,
+    fontFamily: Platform.OS === 'web' ? '"Noto Serif Malayalam", serif' : 'NotoSerifMalayalam-SemiBold',
+  },
+  vacantBadge: {
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 12,
+    backgroundColor: isDark ? '#2a241c' : '#f5ebd6',
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  vacantBadgeText: {
+    fontSize: 11,
+    fontWeight: 'bold',
+    color: colors.mutedBrown,
+    fontFamily: Platform.OS === 'web' ? '"Noto Serif Malayalam", sans-serif' : 'NotoSerifMalayalam-SemiBold',
+  },
+  loadingState: {
+    paddingVertical: 48,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  emptyCard: {
+    backgroundColor: isDark ? colors.card : '#fff8e7',
+    borderRadius: 16,
+    padding: 32,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1.5,
+    borderColor: colors.border,
+    gap: 10,
+  },
+  emptyCardTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: colors.mutedBrown,
+    fontFamily: Platform.OS === 'web' ? '"Noto Serif Malayalam", sans-serif' : 'NotoSerifMalayalam-SemiBold',
   },
   rowActionBtnGroup: {
     flexDirection: 'row',

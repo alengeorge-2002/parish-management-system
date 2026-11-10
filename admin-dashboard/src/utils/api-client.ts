@@ -374,7 +374,7 @@ export const parishCouncilApi = {
     method: 'POST',
     body: JSON.stringify(data),
   }),
-  assignSeat: (id: string | number, data: { memberId?: string | number; term?: string; occupantName?: string; phone?: string }) => fetchApi(`/parish-council/seats/${id}/assign`, {
+  assignSeat: (id: string | number, data: { memberId?: string | number; member_id?: string | number; term?: string; occupantName?: string; phone?: string }) => fetchApi(`/parish-council/seats/${id}/assign`, {
     method: 'PUT',
     body: JSON.stringify(data),
   }),

@@ -2,7 +2,7 @@ import React, { useState, useEffect } from "react";
 import { Plus, Phone, UserPlus, Pencil, Crown, Check, Search, Trash2 } from "lucide-react";
 import { Card, Pill, Button, IconButton, Modal, Field, Input, Select } from "../components/ui";
 import { useApp } from "../lib/app-context";
-import { parishCouncilApi, membersApi } from "../utils/api-client";
+import { fetchApi, parishCouncilApi, membersApi } from "../utils/api-client";
 import getMemberAvatar from "../utils/getMemberAvatar";
 
 export default function Council() {
@@ -16,34 +16,56 @@ export default function Council() {
   const [selectedSeat, setSelectedSeat] = useState<any>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedParishioner, setSelectedParishioner] = useState<any>(null);
-  const [termInput, setTermInput] = useState("2024 – 2026");
+  const [termInput, setTermInput] = useState("2025 – 2027");
   const [parishionersList, setParishionersList] = useState<any[]>([]);
   const [savingAssignment, setSavingAssignment] = useState(false);
 
   const [seatFormData, setSeatFormData] = useState({
-    category: "Ward Councillor",
+    category: "ward_rep",
     roleTitle: "",
     malayalamTitle: "",
     wardNumber: "1",
-    term: "2024 – 2026",
+    term: "2025 – 2027",
   });
+
+  const mapSeatData = (s: any) => {
+    const rawTitle = s.seat_title || s.roleTitle || s.role_title || s.seat || "Council Seat";
+    const parts = rawTitle.includes(" / ") ? rawTitle.split(" / ") : [rawTitle, ""];
+    const seatEn = parts[0].trim();
+    const seatMl = s.malayalamTitle || s.seatMl || s.name_ml || parts[1]?.trim() || "";
+    const isFilled = Boolean(s.member_id) && s.status !== "vacant";
+
+    return {
+      id: s.id || s._id,
+      seat: seatEn,
+      seatMl,
+      category: s.category || (s.committee_type === "executive" ? "executive" : "ward_rep"),
+      memberId: s.member_id ? String(s.member_id) : null,
+      holder: isFilled
+        ? s.occupant_name ||
+          s.occupantName ||
+          (s.first_name ? `${s.first_name} ${s.last_name || ""}`.trim() : s.holder) ||
+          null
+        : null,
+      houseName: isFilled ? s.house_name || s.houseName || "" : "",
+      ward:
+        s.ward_number ||
+        s.wardNumber ||
+        s.ward ||
+        (s.ward_id && typeof s.ward_id === "object" ? s.ward_id.number : null) ||
+        null,
+      wardName: s.ward_name || s.wardName || "",
+      phone: isFilled ? s.phone || s.phone_number || null : null,
+      term: s.term || "2025 – 2027",
+      status: isFilled ? "filled" : "vacant",
+    };
+  };
 
   const loadSeats = async () => {
     try {
       const data = await parishCouncilApi.list();
       if (Array.isArray(data)) {
-        const fetchedSeats = data.map((s: any) => ({
-          id: s.id || s._id,
-          seat: s.roleTitle || s.role_title || s.seat || "Council Seat",
-          seatMl: s.malayalamTitle || s.seatMl || s.name_ml || "",
-          holder: s.occupantName || (s.first_name ? `${s.first_name} ${s.last_name || ""}`.trim() : s.holder) || null,
-          ward: s.wardNumber || s.ward || (s.ward_id ? s.ward_id.number : null) || null,
-          phone: s.phone || s.phone_number || null,
-          term: s.term || "2024 – 2026",
-          status: s.status || ((s.holder || s.occupantName || s.first_name) ? "filled" : "vacant"),
-        }));
-
-        setCouncilSeats(fetchedSeats);
+        setCouncilSeats(data.map(mapSeatData));
       }
     } catch (e) {
       console.error("[Council] API fetch error:", e);
@@ -52,15 +74,24 @@ export default function Council() {
 
   const loadParishioners = async () => {
     try {
-      const data = await membersApi.list();
+      const data = await fetchApi("/members").catch(() => membersApi.list());
       if (Array.isArray(data)) {
         setParishionersList(
           data.map((m: any) => ({
-            id: m.id || m._id,
-            name: m.name || `${m.firstName || m.first_name || ""} ${m.lastName || m.last_name || ""}`.trim() || "Parishioner",
+            id: String(m.id || m._id),
+            name:
+              m.fullName ||
+              m.name ||
+              `${m.firstName || m.first_name || ""} ${m.lastName || m.last_name || ""}`.trim() ||
+              "Parishioner",
             nameMl: m.nameMl || m.malayalam_name || m.malayalamName || "",
             phone: m.phone || m.phoneNumber || m.phone_number || "",
-            ward: m.wardNumber || (typeof m.ward_id === 'object' ? m.ward_id?.ward_number : m.ward_id) || m.ward || 1,
+            ward:
+              m.wardNumber ||
+              m.ward_number ||
+              (typeof m.ward_id === "object" ? m.ward_id?.ward_number : m.ward_id) ||
+              m.ward ||
+              1,
             unit: m.unit || m.unit_number || "",
             familyHouse: m.familyHouse || m.house_name || m.houseName || "",
             avatar: getMemberAvatar(m.raw || m),
@@ -90,8 +121,8 @@ export default function Council() {
     })
     .sort((a, b) => {
       if (selectedSeat?.ward) {
-        if (a.ward === selectedSeat.ward && b.ward !== selectedSeat.ward) return -1;
-        if (a.ward !== selectedSeat.ward && b.ward === selectedSeat.ward) return 1;
+        if (Number(a.ward) === Number(selectedSeat.ward) && Number(b.ward) !== Number(selectedSeat.ward)) return -1;
+        if (Number(a.ward) !== Number(selectedSeat.ward) && Number(b.ward) === Number(selectedSeat.ward)) return 1;
       }
       return 0;
     });
@@ -100,7 +131,7 @@ export default function Council() {
     setSelectedSeat(seat);
     setSearchQuery("");
     setSelectedParishioner(null);
-    setTermInput(seat.term || "2024 – 2026");
+    setTermInput(seat.term || "2025 – 2027");
     setIsAssignModalOpen(true);
   };
 
@@ -109,11 +140,12 @@ export default function Council() {
     setSearchQuery("");
     const existing = parishionersList.find(
       (p) =>
+        (seat.memberId && String(p.id) === String(seat.memberId)) ||
         p.name.toLowerCase() === (seat.holder || "").toLowerCase() ||
         (p.phone && p.phone === seat.phone)
     );
     setSelectedParishioner(existing || null);
-    setTermInput(seat.term || "2024 – 2026");
+    setTermInput(seat.term || "2025 – 2027");
     setIsAssignModalOpen(true);
   };
 
@@ -125,27 +157,12 @@ export default function Council() {
       const pId = selectedParishioner.id;
 
       await parishCouncilApi.assignSeat(sId, {
+        member_id: pId,
         memberId: pId,
-        term: termInput,
-        occupantName: selectedParishioner.name,
-        phone: selectedParishioner.phone,
+        term: termInput.trim() || "2025 – 2027",
       });
 
-      setCouncilSeats((prev) =>
-        prev.map((s) => {
-          if (s.id === sId) {
-            return {
-              ...s,
-              holder: selectedParishioner.name,
-              phone: selectedParishioner.phone,
-              ward: selectedSeat.ward || selectedParishioner.ward,
-              term: termInput,
-              status: "filled",
-            };
-          }
-          return s;
-        })
-      );
+      await loadSeats();
 
       toast(
         lang === "en"
@@ -153,28 +170,8 @@ export default function Council() {
           : `${selectedParishioner.name}നെ ${selectedSeat.seat} ലേക്ക് നിയമിച്ചു`
       );
       setIsAssignModalOpen(false);
-    } catch (_) {
-      setCouncilSeats((prev) =>
-        prev.map((s) => {
-          if (s.id === selectedSeat.id) {
-            return {
-              ...s,
-              holder: selectedParishioner.name,
-              phone: selectedParishioner.phone,
-              ward: selectedSeat.ward || selectedParishioner.ward,
-              term: termInput,
-              status: "filled",
-            };
-          }
-          return s;
-        })
-      );
-      toast(
-        lang === "en"
-          ? `Assigned ${selectedParishioner.name} to ${selectedSeat.seat}`
-          : `${selectedParishioner.name}നെ നിയമിച്ചു`
-      );
-      setIsAssignModalOpen(false);
+    } catch (err: any) {
+      toast(err.message || "Failed to assign seat");
     } finally {
       setSavingAssignment(false);
     }
@@ -185,37 +182,11 @@ export default function Council() {
     setSavingAssignment(true);
     try {
       await parishCouncilApi.vacateSeat(selectedSeat.id);
-      setCouncilSeats((prev) =>
-        prev.map((s) => {
-          if (s.id === selectedSeat.id) {
-            return {
-              ...s,
-              holder: null,
-              phone: null,
-              status: "vacant",
-            };
-          }
-          return s;
-        })
-      );
+      await loadSeats();
       toast(lang === "en" ? `Vacated seat ${selectedSeat.seat}` : `${selectedSeat.seat} ഒഴിവാക്കി`);
       setIsAssignModalOpen(false);
-    } catch (_) {
-      setCouncilSeats((prev) =>
-        prev.map((s) => {
-          if (s.id === selectedSeat.id) {
-            return {
-              ...s,
-              holder: null,
-              phone: null,
-              status: "vacant",
-            };
-          }
-          return s;
-        })
-      );
-      toast(lang === "en" ? `Vacated seat ${selectedSeat.seat}` : `${selectedSeat.seat} ഒഴിവാക്കി`);
-      setIsAssignModalOpen(false);
+    } catch (err: any) {
+      toast(err.message || "Failed to vacate seat");
     } finally {
       setSavingAssignment(false);
     }
@@ -227,75 +198,33 @@ export default function Council() {
 
     setSubmitting(true);
     try {
+      const combinedTitle = seatFormData.malayalamTitle.trim()
+        ? `${seatFormData.roleTitle.trim()} / ${seatFormData.malayalamTitle.trim()}`
+        : seatFormData.roleTitle.trim();
+
       const newSeatPayload = {
-        roleTitle: seatFormData.roleTitle.trim(),
+        roleTitle: combinedTitle,
         englishTitle: seatFormData.roleTitle.trim(),
         malayalamTitle: seatFormData.malayalamTitle.trim(),
         category: seatFormData.category,
-        wardNumber: seatFormData.category === "Ward Councillor" ? parseInt(seatFormData.wardNumber, 10) : undefined,
-        term: seatFormData.term.trim() || "2024 – 2026",
+        wardNumber: seatFormData.category === "ward_rep" ? parseInt(seatFormData.wardNumber, 10) : undefined,
+        term: seatFormData.term.trim() || "2025 – 2027",
       };
 
-      const res = await parishCouncilApi.createSeat(newSeatPayload);
-
-      const localNewSeat = {
-        id: `PC-${Date.now()}`,
-        seat: seatFormData.roleTitle.trim(),
-        seatMl: seatFormData.malayalamTitle.trim() || seatFormData.roleTitle.trim(),
-        holder: null,
-        ward: seatFormData.category === "Ward Councillor" ? parseInt(seatFormData.wardNumber, 10) : null,
-        phone: null,
-        term: seatFormData.term.trim() || "2024 – 2026",
-        status: "vacant",
-      };
-
-      if (Array.isArray(res) && res.length > 0) {
-        setCouncilSeats(
-          res.map((s: any) => ({
-            id: s.id || s._id,
-            seat: s.roleTitle || s.role_title || s.seat || "Council Seat",
-            seatMl: s.malayalamTitle || s.seatMl || s.name_ml || "",
-            holder: s.occupantName || (s.first_name ? `${s.first_name} ${s.last_name || ""}`.trim() : s.holder) || null,
-            ward: s.wardNumber || s.ward || null,
-            phone: s.phone || s.phone_number || null,
-            term: s.term || "2024 – 2026",
-            status: s.status || ((s.holder || s.occupantName || s.first_name) ? "filled" : "vacant"),
-          }))
-        );
-      } else {
-        setCouncilSeats((prev) => [...prev, localNewSeat]);
-      }
+      await parishCouncilApi.createSeat(newSeatPayload);
+      await loadSeats();
 
       toast(lang === "en" ? `Created seat: ${seatFormData.roleTitle}` : `സീറ്റ് ചേർത്തു: ${seatFormData.roleTitle}`);
       setIsAddSeatModalOpen(false);
       setSeatFormData({
-        category: "Ward Councillor",
+        category: "ward_rep",
         roleTitle: "",
         malayalamTitle: "",
         wardNumber: "1",
-        term: "2024 – 2026",
+        term: "2025 – 2027",
       });
-    } catch (_) {
-      const localNewSeat = {
-        id: `PC-${Date.now()}`,
-        seat: seatFormData.roleTitle.trim(),
-        seatMl: seatFormData.malayalamTitle.trim() || seatFormData.roleTitle.trim(),
-        holder: null,
-        ward: seatFormData.category === "Ward Councillor" ? parseInt(seatFormData.wardNumber, 10) : null,
-        phone: null,
-        term: seatFormData.term.trim() || "2024 – 2026",
-        status: "vacant",
-      };
-      setCouncilSeats((prev) => [...prev, localNewSeat]);
-      toast(lang === "en" ? `Created seat: ${seatFormData.roleTitle}` : `സീറ്റ് ചേർത്തു: ${seatFormData.roleTitle}`);
-      setIsAddSeatModalOpen(false);
-      setSeatFormData({
-        category: "Ward Councillor",
-        roleTitle: "",
-        malayalamTitle: "",
-        wardNumber: "1",
-        term: "2024 – 2026",
-      });
+    } catch (err: any) {
+      toast(err.message || "Failed to create seat");
     } finally {
       setSubmitting(false);
     }
@@ -308,7 +237,7 @@ export default function Council() {
           <Pill tone="green">{filled} {lang === "en" ? "filled" : "നിറഞ്ഞു"}</Pill>
           <Pill tone="red">{vacant} {lang === "en" ? "vacant" : "ഒഴിവ്"}</Pill>
           <span className="text-[12px] text-muted-foreground">
-            {lang === "en" ? "Term 2024 – 2026" : "കാലാവധി 2024 – 2026"}
+            {lang === "en" ? "Term 2025 – 2027" : "കാലാവധി 2025 – 2027"}
           </span>
         </div>
         <Button className="sm:ml-auto" onClick={() => setIsAddSeatModalOpen(true)}>
@@ -334,25 +263,34 @@ export default function Council() {
               <tr key={s.id} className="transition-colors hover:bg-secondary/40">
                 <td className="px-5 py-3">
                   <div className="flex items-center gap-2">
-                    {s.seat.startsWith("President") && (
-                      <Crown className="h-3.5 w-3.5 text-primary" />
+                    {s.seat.toLowerCase().includes("president") && (
+                      <Crown className="h-3.5 w-3.5 text-primary shrink-0" />
                     )}
                     <div>
                       <div className="font-semibold text-foreground">{s.seat}</div>
-                      <div className="font-malayalam text-[11px] text-muted-foreground">
-                        {s.seatMl}
-                      </div>
+                      {s.seatMl && (
+                        <div className="font-malayalam text-[11px] text-muted-foreground">
+                          {s.seatMl}
+                        </div>
+                      )}
                     </div>
                   </div>
                 </td>
                 <td className="px-4 py-3">
                   {s.holder ? (
-                    <div className="flex items-center gap-1.5">
-                      <span className="font-medium text-foreground">{s.holder}</span>
-                      {s.phone && (
-                        <span className="font-mono text-[11px] text-muted-foreground">
-                          · {s.phone}
-                        </span>
+                    <div>
+                      <div className="flex items-center gap-1.5">
+                        <span className="font-medium text-foreground">{s.holder}</span>
+                        {s.phone && (
+                          <span className="font-mono text-[11px] text-muted-foreground">
+                            · {s.phone}
+                          </span>
+                        )}
+                      </div>
+                      {s.houseName && (
+                        <div className="text-[11px] text-muted-foreground">
+                          {s.houseName}
+                        </div>
                       )}
                     </div>
                   ) : (
@@ -445,16 +383,15 @@ export default function Council() {
               onChange={(e) => setSeatFormData({ ...seatFormData, category: e.target.value })}
               className="bg-[#181b22] border-[#2d323e] text-slate-200"
             >
-              <option value="Ward Councillor">വാർഡ് കൗൺസിലർ (Ward Councillor)</option>
-              <option value="Representative">പ്രതിനിധി (Representative)</option>
-              <option value="Executive">ഭാരവാഹി (Executive)</option>
+              <option value="ward_rep">വാർഡ് പ്രതിനിധി (Ward Representative)</option>
+              <option value="executive">ഭാരവാഹി (Executive Committee)</option>
             </Select>
           </Field>
 
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <Field label="Designation / Title (English)">
               <Input
-                placeholder="e.g. Ward #6 Councillor"
+                placeholder="e.g. Ward #6 Representative"
                 value={seatFormData.roleTitle}
                 onChange={(e) => setSeatFormData({ ...seatFormData, roleTitle: e.target.value })}
                 className="bg-[#181b22] border-[#2d323e] text-slate-200"
@@ -472,7 +409,7 @@ export default function Council() {
             </Field>
           </div>
 
-          {seatFormData.category === "Ward Councillor" && (
+          {seatFormData.category === "ward_rep" && (
             <Field label="വാർഡ് നമ്പർ / Ward Number">
               <Select
                 value={seatFormData.wardNumber}
@@ -490,7 +427,7 @@ export default function Council() {
 
           <Field label="കാലാവധി / Term">
             <Input
-              placeholder="2024 – 2026"
+              placeholder="2025 – 2027"
               value={seatFormData.term}
               onChange={(e) => setSeatFormData({ ...seatFormData, term: e.target.value })}
               className="bg-[#181b22] border-[#2d323e] text-slate-200 font-mono"
@@ -506,7 +443,7 @@ export default function Council() {
         title={`${selectedSeat?.seat || "Council Seat"} - ${
           selectedSeat?.status === "vacant" ? "Assign Member" : "Edit Seat Assignment"
         }`}
-        subtitle="Select a registered parishioner to occupy this seat."
+        subtitle="Select a registered parishioner from the live directory to occupy this seat."
         wide
         footer={
           <>
@@ -540,6 +477,9 @@ export default function Council() {
               <div>
                 <span className="text-slate-400">Current Holder:</span>{" "}
                 <span className="font-semibold text-white">{selectedSeat.holder}</span>
+                {selectedSeat.houseName && (
+                  <span className="text-slate-400"> · {selectedSeat.houseName}</span>
+                )}
                 {selectedSeat.phone && (
                   <span className="font-mono text-slate-400"> · {selectedSeat.phone}</span>
                 )}
@@ -554,7 +494,7 @@ export default function Council() {
               <Input
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Search parishioner by name, phone, or ward..."
+                placeholder="Search parishioner by name, phone, or house name..."
                 className="pl-9 bg-[#181b22] border-[#2d323e] text-slate-200 placeholder:text-slate-500"
               />
             </div>
@@ -573,12 +513,12 @@ export default function Council() {
             <div className="max-h-52 overflow-y-auto space-y-1.5 pr-1 rounded-lg border border-[#2d323e] bg-[#181b22] p-2">
               {filteredParishioners.length === 0 ? (
                 <div className="py-4 text-center text-xs text-slate-500">
-                  No parishioner found matching "{searchQuery}"
+                  No registered parishioner found matching "{searchQuery}"
                 </div>
               ) : (
                 filteredParishioners.map((p) => {
                   const isSel = selectedParishioner?.id === p.id;
-                  const isMatchWard = selectedSeat?.ward && p.ward === selectedSeat.ward;
+                  const isMatchWard = selectedSeat?.ward && Number(p.ward) === Number(selectedSeat.ward);
                   return (
                     <div
                       key={p.id}
@@ -613,12 +553,12 @@ export default function Council() {
                             )}
                           </div>
                           <div className="text-[11px] text-slate-400 font-mono">
-                            {p.familyHouse} · {p.phone}
+                            {p.familyHouse || "No house name"} · {p.phone || "No phone"}
                           </div>
                         </div>
                       </div>
                       <Pill tone={isSel ? "gold" : "neutral"} className="text-[10px]">
-                        Ward #{p.ward} · {p.unit}
+                        Ward #{p.ward}{p.unit ? ` · ${p.unit}` : ""}
                       </Pill>
                     </div>
                   );
@@ -627,11 +567,29 @@ export default function Council() {
             </div>
           </div>
 
+          {selectedParishioner && (
+            <div className="rounded-lg border border-[#F4C430]/40 bg-[#F4C430]/5 p-3 text-xs flex flex-wrap items-center justify-between gap-2">
+              <div>
+                <div className="text-[10px] uppercase tracking-wider text-[#F4C430] font-semibold">
+                  Selected Parishioner (ID #{selectedParishioner.id})
+                </div>
+                <div className="mt-0.5 font-semibold text-white">
+                  {selectedParishioner.name}
+                  {selectedParishioner.familyHouse ? ` — ${selectedParishioner.familyHouse}` : ""}
+                </div>
+              </div>
+              <div className="text-right font-mono text-slate-300">
+                <div>{selectedParishioner.phone || "No Phone Registered"}</div>
+                <div className="text-[11px] text-slate-400">Ward #{selectedParishioner.ward}</div>
+              </div>
+            </div>
+          )}
+
           <Field label="കാലാവധി / Term">
             <Input
               value={termInput}
               onChange={(e) => setTermInput(e.target.value)}
-              placeholder="2024 – 2026"
+              placeholder="2025 – 2027"
               className="bg-[#181b22] border-[#2d323e] text-slate-200 font-mono"
             />
           </Field>
