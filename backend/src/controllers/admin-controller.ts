@@ -334,16 +334,26 @@ export const createWard = async (req: Request, res: Response): Promise<any> => {
     );
 
     const row = result.rows[0];
-    // Dynamically create 1 vacant representative seat for the newly created ward
+    // Dynamically create or sync representative seat for the newly created ward
     try {
+      await pool.query(`
+        ALTER TABLE wards ADD COLUMN IF NOT EXISTS representative_phone VARCHAR(50);
+        UPDATE wards SET representative_phone = $1 WHERE id = $2;
+      `, [phoneNum || null, row.id]);
+    } catch (_) {}
+
+    try {
+      const cleanRep = repName && repName.trim().toLowerCase() !== 'unassigned' ? repName.trim() : null;
+      const cleanPhone = (phoneNum || '').trim() || null;
+      const seatStatus = cleanRep ? 'filled' : 'vacant';
       const seatTitle = `Ward #${row.ward_number || row.id} Representative (${row.ward_name}) / വാർഡ് കൗൺസിലർ`;
       const orderNum = 100 + (parseInt(String(row.ward_number || row.id), 10) || Number(row.id));
       await pool.query(
         `INSERT INTO parish_council (
            role_title, committee_type, ward_id, member_id,
            occupant_name, phone, term, status, display_order
-         ) VALUES ($1, 'ward_rep', $2, NULL, NULL, NULL, '2025 – 2027', 'vacant', $3)`,
-        [seatTitle, row.id, orderNum]
+         ) VALUES ($1, 'ward_rep', $2, NULL, $3, $4, '2025 – 2027', $5, $6)`,
+        [seatTitle, row.id, cleanRep, cleanPhone, seatStatus, orderNum]
       );
     } catch (_) {
       // Ignore if parish_council not yet initialized
@@ -388,6 +398,29 @@ export const updateWard = async (req: Request, res: Response): Promise<any> => {
 
     if (result.rows.length === 0) return res.status(404).json({ error: 'Ward not found' });
     const row = result.rows[0];
+
+    // Two-way sync back to representative_phone and parish_council
+    try {
+      await pool.query(`
+        ALTER TABLE wards ADD COLUMN IF NOT EXISTS representative_phone VARCHAR(50);
+        UPDATE wards SET representative_phone = $1 WHERE id = $2;
+      `, [phoneNum || null, row.id]);
+
+      const cleanRep = repName && repName.trim().toLowerCase() !== 'unassigned' ? repName.trim() : null;
+      const cleanPhone = (phoneNum || '').trim() || null;
+      const seatStatus = cleanRep ? 'filled' : 'vacant';
+      const seatTitle = `Ward #${row.ward_number || row.id} Representative (${row.ward_name}) / വാർഡ് കൗൺസിലർ`;
+      await pool.query(
+        `UPDATE parish_council SET
+           role_title = $1,
+           occupant_name = $2,
+           phone = $3,
+           status = $4
+         WHERE ward_id = $5`,
+        [seatTitle, cleanRep, cleanPhone, seatStatus, row.id]
+      );
+    } catch (_) {}
+
     res.json({
       ...row,
       id: String(row.id),

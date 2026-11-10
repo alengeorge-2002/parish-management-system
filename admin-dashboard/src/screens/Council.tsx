@@ -15,7 +15,10 @@ export default function Council() {
   const [isAssignModalOpen, setIsAssignModalOpen] = useState(false);
   const [selectedSeat, setSelectedSeat] = useState<any>(null);
   const [searchQuery, setSearchQuery] = useState("");
+  const [wardOnlyFilter, setWardOnlyFilter] = useState(false);
   const [selectedParishioner, setSelectedParishioner] = useState<any>(null);
+  const [repNameInput, setRepNameInput] = useState("");
+  const [repPhoneInput, setRepPhoneInput] = useState("");
   const [termInput, setTermInput] = useState("2025 – 2027");
   const [parishionersList, setParishionersList] = useState<any[]>([]);
   const [savingAssignment, setSavingAssignment] = useState(false);
@@ -33,20 +36,23 @@ export default function Council() {
     const parts = rawTitle.includes(" / ") ? rawTitle.split(" / ") : [rawTitle, ""];
     const seatEn = parts[0].trim();
     const seatMl = s.malayalamTitle || s.seatMl || s.name_ml || parts[1]?.trim() || "";
-    const isFilled = Boolean(s.member_id) && s.status !== "vacant";
+    const resolvedHolder =
+      s.occupant_name ||
+      s.occupantName ||
+      (s.first_name ? `${s.first_name} ${s.last_name || ""}`.trim() : s.holder) ||
+      null;
+    const isFilled =
+      Boolean(resolvedHolder) &&
+      (s.status === "filled" || Boolean(s.member_id));
 
     return {
       id: s.id || s._id,
       seat: seatEn,
       seatMl,
       category: s.category || (s.committee_type === "executive" ? "executive" : "ward_rep"),
+      wardId: s.ward_id ? String(s.ward_id) : null,
       memberId: s.member_id ? String(s.member_id) : null,
-      holder: isFilled
-        ? s.occupant_name ||
-          s.occupantName ||
-          (s.first_name ? `${s.first_name} ${s.last_name || ""}`.trim() : s.holder) ||
-          null
-        : null,
+      holder: isFilled ? resolvedHolder : null,
       houseName: isFilled ? s.house_name || s.houseName || "" : "",
       ward:
         s.ward_number ||
@@ -112,8 +118,13 @@ export default function Council() {
   const filled = councilSeats.filter((s) => s.status === "filled").length;
   const vacant = councilSeats.length - filled;
 
+  const isWardSeat = Boolean(selectedSeat?.wardId || selectedSeat?.category === "ward_rep");
+
   const filteredParishioners = parishionersList
     .filter((p) => {
+      if (wardOnlyFilter && selectedSeat?.ward) {
+        if (Number(p.ward) !== Number(selectedSeat.ward)) return false;
+      }
       if (!searchQuery.trim()) return true;
       const q = searchQuery.toLowerCase().trim();
       const hay = `${p.name} ${p.nameMl} ${p.phone} ${p.familyHouse} ${p.ward} ${p.unit}`.toLowerCase();
@@ -130,7 +141,10 @@ export default function Council() {
   const handleOpenAssignModal = (seat: any) => {
     setSelectedSeat(seat);
     setSearchQuery("");
+    setWardOnlyFilter(false);
     setSelectedParishioner(null);
+    setRepNameInput(seat.holder || "");
+    setRepPhoneInput(seat.phone || "");
     setTermInput(seat.term || "2025 – 2027");
     setIsAssignModalOpen(true);
   };
@@ -138,6 +152,7 @@ export default function Council() {
   const handleOpenEditModal = (seat: any) => {
     setSelectedSeat(seat);
     setSearchQuery("");
+    setWardOnlyFilter(false);
     const existing = parishionersList.find(
       (p) =>
         (seat.memberId && String(p.id) === String(seat.memberId)) ||
@@ -145,29 +160,43 @@ export default function Council() {
         (p.phone && p.phone === seat.phone)
     );
     setSelectedParishioner(existing || null);
+    setRepNameInput(seat.holder || existing?.name || "");
+    setRepPhoneInput(seat.phone || existing?.phone || "");
     setTermInput(seat.term || "2025 – 2027");
     setIsAssignModalOpen(true);
   };
 
   const handleConfirmAssignment = async () => {
-    if (!selectedSeat || !selectedParishioner) return;
+    if (!selectedSeat) return;
+    if (!isWardSeat && !selectedParishioner) return;
+    if (isWardSeat && !selectedParishioner && !repNameInput.trim()) return;
+
     setSavingAssignment(true);
     try {
       const sId = selectedSeat.id;
-      const pId = selectedParishioner.id;
+      const pId = selectedParishioner?.id || selectedSeat.memberId || undefined;
+      const finalRepName = isWardSeat
+        ? (repNameInput.trim() || selectedParishioner?.name || "")
+        : selectedParishioner?.name;
+      const finalRepPhone = isWardSeat
+        ? (repPhoneInput.trim() || selectedParishioner?.phone || "")
+        : selectedParishioner?.phone;
 
       await parishCouncilApi.assignSeat(sId, {
         member_id: pId,
         memberId: pId,
+        occupantName: finalRepName,
+        phone: finalRepPhone,
         term: termInput.trim() || "2025 – 2027",
       });
 
       await loadSeats();
 
+      const displayName = finalRepName || selectedParishioner?.name || "Member";
       toast(
         lang === "en"
-          ? `Assigned ${selectedParishioner.name} to ${selectedSeat.seat}`
-          : `${selectedParishioner.name}നെ ${selectedSeat.seat} ലേക്ക് നിയമിച്ചു`
+          ? `Assigned ${displayName} to ${selectedSeat.seat}`
+          : `${displayName}നെ ${selectedSeat.seat} ലേക്ക് നിയമിച്ചു`
       );
       setIsAssignModalOpen(false);
     } catch (err: any) {
@@ -463,7 +492,10 @@ export default function Council() {
             </Button>
             <Button
               onClick={handleConfirmAssignment}
-              disabled={!selectedParishioner || savingAssignment}
+              disabled={
+                savingAssignment ||
+                (isWardSeat ? !selectedParishioner && !repNameInput.trim() : !selectedParishioner)
+              }
             >
               <Check className="h-4 w-4" />
               {savingAssignment ? "Saving..." : "Confirm Assignment"}
@@ -501,12 +533,22 @@ export default function Council() {
           </Field>
 
           <div className="space-y-1.5">
-            <div className="flex items-center justify-between text-xs font-semibold text-slate-400 uppercase tracking-wider">
+            <div className="flex flex-wrap items-center justify-between gap-2 text-xs font-semibold text-slate-400 uppercase tracking-wider">
               <span>Select Registered Member ({filteredParishioners.length} found)</span>
               {selectedSeat?.ward && (
-                <span className="text-[11px] text-amber-400 font-normal normal-case">
-                  ★ Ward #{selectedSeat.ward} residents prioritized
-                </span>
+                <button
+                  type="button"
+                  onClick={() => setWardOnlyFilter((prev) => !prev)}
+                  className={`text-[11px] font-medium normal-case px-2.5 py-1 rounded-full border transition-colors cursor-pointer ${
+                    wardOnlyFilter
+                      ? "border-[#F4C430] bg-[#F4C430]/15 text-[#F4C430]"
+                      : "border-[#2d323e] bg-[#1e222b] text-amber-400 hover:border-amber-400/50"
+                  }`}
+                >
+                  {wardOnlyFilter
+                    ? `✓ Showing Ward #${selectedSeat.ward} Only (Click for All)`
+                    : `★ Ward #${selectedSeat.ward} prioritized (Filter Ward Only)`}
+                </button>
               )}
             </div>
 
@@ -522,7 +564,13 @@ export default function Council() {
                   return (
                     <div
                       key={p.id}
-                      onClick={() => setSelectedParishioner(p)}
+                      onClick={() => {
+                        setSelectedParishioner(p);
+                        if (isWardSeat) {
+                          setRepNameInput(p.name || "");
+                          setRepPhoneInput(p.phone || "");
+                        }
+                      }}
                       className={`flex items-center justify-between p-2.5 rounded-lg border transition-all cursor-pointer ${
                         isSel
                           ? "border-[#F4C430] bg-[#F4C430]/10 text-white shadow-md"
@@ -582,6 +630,27 @@ export default function Council() {
                 <div>{selectedParishioner.phone || "No Phone Registered"}</div>
                 <div className="text-[11px] text-slate-400">Ward #{selectedParishioner.ward}</div>
               </div>
+            </div>
+          )}
+
+          {isWardSeat && (
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 rounded-lg border border-[#2d323e] bg-[#141414]/60 p-3">
+              <Field label="Representative Name (Syncs with Ward)">
+                <Input
+                  value={repNameInput}
+                  onChange={(e) => setRepNameInput(e.target.value)}
+                  placeholder="Selected member or representative name"
+                  className="bg-[#181b22] border-[#2d323e] text-slate-200"
+                />
+              </Field>
+              <Field label="Contact Phone">
+                <Input
+                  value={repPhoneInput}
+                  onChange={(e) => setRepPhoneInput(e.target.value)}
+                  placeholder="+91 94471 00000"
+                  className="bg-[#181b22] border-[#2d323e] text-slate-200 font-mono"
+                />
+              </Field>
             </div>
           )}
 

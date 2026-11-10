@@ -26,21 +26,38 @@ export const EXECUTIVE_SEATS = [
 
 let councilSeatsEnsured = false;
 
+export const ensureWardsSyncSchema = async (): Promise<void> => {
+  try {
+    await pool.query(`
+      ALTER TABLE wards ADD COLUMN IF NOT EXISTS representative_phone VARCHAR(50);
+      ALTER TABLE wards ADD COLUMN IF NOT EXISTS representative_id INT REFERENCES members(id) ON DELETE SET NULL;
+      UPDATE wards
+      SET representative_phone = contact_phone
+      WHERE representative_phone IS NULL AND contact_phone IS NOT NULL;
+    `);
+  } catch (err) {
+    console.warn('ensureWardsSyncSchema notice:', err);
+  }
+};
+
 /**
  * Ensures standard designated Parish Council seats (12 Executive Committee + 1 per registered Ward)
- * are initialized in a strictly VACANT state without any fake/dummy sample names.
+ * are initialized cleanly without fake/dummy executive names, and syncs ward representative seats.
  */
 export const ensureCouncilSeatsSeeded = async (forceCheck = false): Promise<void> => {
   if (councilSeatsEnsured && !forceCheck) return;
   try {
+    await ensureWardsSyncSchema();
     const existingRes = await pool.query('SELECT id, role_title, committee_type, ward_id, member_id FROM parish_council');
     const existingRows = existingRes.rows || [];
 
-    // Ensure no legacy dummy records without member_id stay 'filled'
+    // Ensure no legacy dummy records without member_id stay 'filled' in executive seats
     await pool.query(
       `UPDATE parish_council
        SET occupant_name = NULL, phone = NULL, status = 'vacant'
-       WHERE member_id IS NULL AND (status IS DISTINCT FROM 'vacant' OR occupant_name IS NOT NULL OR phone IS NOT NULL)`
+       WHERE LOWER(committee_type) = 'executive'
+         AND member_id IS NULL
+         AND (status IS DISTINCT FROM 'vacant' OR occupant_name IS NOT NULL OR phone IS NOT NULL)`
     );
 
     // 1. Seed designated Executive Committee seats if missing
@@ -63,8 +80,11 @@ export const ensureCouncilSeatsSeeded = async (forceCheck = false): Promise<void
       }
     }
 
-    // 2. Dynamically create 1 vacant representative seat for each registered ward
-    const wardsRes = await pool.query('SELECT id, ward_name, ward_number FROM wards ORDER BY COALESCE(ward_number, id) ASC');
+    // 2. Dynamically create 1 representative seat for each registered ward (populating live rep if assigned on ward)
+    const wardsRes = await pool.query(
+      `SELECT id, ward_name, ward_number, representative_name, representative_phone, contact_phone, representative_id
+       FROM wards ORDER BY COALESCE(ward_number, id) ASC`
+    );
     const existingWardIds = new Set(
       existingRows
         .filter((r: any) => r.ward_id !== null && r.ward_id !== undefined)
@@ -77,12 +97,20 @@ export const ensureCouncilSeatsSeeded = async (forceCheck = false): Promise<void
         const wLabel = w.ward_name ? ` (${w.ward_name})` : '';
         const seatTitle = `Ward #${wNum} Representative${wLabel} / വാർഡ് കൗൺസിലർ`;
         const orderNum = 100 + (parseInt(String(wNum), 10) || Number(w.id));
+        const repName =
+          w.representative_name && w.representative_name.trim().toLowerCase() !== 'unassigned'
+            ? w.representative_name.trim()
+            : null;
+        const repPhone = (w.representative_phone || w.contact_phone || '').trim() || null;
+        const repMemberId = w.representative_id || null;
+        const initStatus = repName || repMemberId ? 'filled' : 'vacant';
+
         await pool.query(
           `INSERT INTO parish_council (
              role_title, committee_type, ward_id, member_id,
              occupant_name, phone, term, status, display_order
-           ) VALUES ($1, 'ward_rep', $2, NULL, NULL, NULL, $3, 'vacant', $4)`,
-          [seatTitle, w.id, DEFAULT_TERM, orderNum]
+           ) VALUES ($1, 'ward_rep', $2, $3, $4, $5, $6, $7, $8)`,
+          [seatTitle, w.id, repMemberId, repName, repPhone, DEFAULT_TERM, initStatus, orderNum]
         );
       }
     }
@@ -97,20 +125,69 @@ const SEAT_SELECT_QUERY = `
   SELECT pc.*, pc.id as _id,
          m.id as real_member_id, m.first_name, m.last_name, m.phone_number, m.email,
          f.house_name, f.family_name,
-         w.ward_name, w.ward_number
+         w.ward_name, w.ward_number,
+         w.representative_name as ward_rep_name,
+         w.representative_phone as ward_rep_phone,
+         w.contact_phone as ward_contact_phone,
+         w.representative_id as ward_rep_id,
+         wm.id as wm_member_id, wm.first_name as wm_first_name, wm.last_name as wm_last_name,
+         wm.phone_number as wm_phone_number, wm.email as wm_email,
+         wf.house_name as wm_house_name, wf.family_name as wm_family_name
   FROM parish_council pc
   LEFT JOIN members m ON pc.member_id = m.id
   LEFT JOIN families f ON m.family_id = f.id
   LEFT JOIN wards w ON pc.ward_id = w.id
+  LEFT JOIN members wm ON w.representative_id = wm.id
+  LEFT JOIN families wf ON wm.family_id = wf.id
 `;
 
 const mapSeatRow = (row: any) => {
-  const isFilled = Boolean(row.real_member_id);
-  const fullName = isFilled ? `${row.first_name || ''} ${row.last_name || ''}`.trim() : null;
-  const houseName = isFilled ? (row.house_name || row.family_name || null) : null;
-  const phone = isFilled ? (row.phone_number || row.phone || null) : null;
   const normalizedCategory =
     (row.committee_type || '').toLowerCase() === 'executive' ? 'executive' : 'ward_rep';
+
+  let isFilled = false;
+  let fullName: string | null = null;
+  let houseName: string | null = null;
+  let phone: string | null = null;
+  let email: string | null = null;
+  let linkedMemberId: string | null = null;
+
+  if (normalizedCategory === 'ward_rep' && row.ward_id) {
+    const wardRepName =
+      row.ward_rep_name && row.ward_rep_name.trim().toLowerCase() !== 'unassigned'
+        ? row.ward_rep_name.trim()
+        : null;
+    const wardRepPhone =
+      (row.ward_rep_phone && row.ward_rep_phone.trim()) ||
+      (row.ward_contact_phone && row.ward_contact_phone.trim()) ||
+      null;
+    const resolvedMemberId = row.real_member_id || row.wm_member_id || row.ward_rep_id || null;
+    const memberFullName = row.real_member_id
+      ? `${row.first_name || ''} ${row.last_name || ''}`.trim()
+      : row.wm_member_id
+        ? `${row.wm_first_name || ''} ${row.wm_last_name || ''}`.trim()
+        : null;
+
+    fullName = wardRepName || memberFullName || null;
+    phone =
+      wardRepPhone ||
+      (row.real_member_id ? row.phone_number : row.wm_phone_number) ||
+      (row.phone && row.phone.trim()) ||
+      null;
+    houseName = row.real_member_id
+      ? row.house_name || row.family_name || null
+      : row.wm_house_name || row.wm_family_name || null;
+    email = row.real_member_id ? row.email || null : row.wm_email || null;
+    linkedMemberId = resolvedMemberId ? String(resolvedMemberId) : null;
+    isFilled = Boolean(fullName || linkedMemberId);
+  } else {
+    isFilled = Boolean(row.real_member_id);
+    fullName = isFilled ? `${row.first_name || ''} ${row.last_name || ''}`.trim() : null;
+    houseName = isFilled ? row.house_name || row.family_name || null : null;
+    phone = isFilled ? row.phone_number || row.phone || null : null;
+    email = isFilled ? row.email || null : null;
+    linkedMemberId = isFilled ? String(row.real_member_id) : null;
+  }
 
   return {
     ...row,
@@ -123,16 +200,16 @@ const mapSeatRow = (row: any) => {
     committee_type: row.committee_type,
     term: row.term || DEFAULT_TERM,
     status: isFilled ? 'filled' : 'vacant',
-    member_id: isFilled ? String(row.real_member_id) : null,
+    member_id: linkedMemberId,
     occupant_name: fullName,
     occupantName: fullName,
-    first_name: isFilled ? (row.first_name || '') : '',
-    last_name: isFilled ? (row.last_name || '') : '',
+    first_name: isFilled ? (row.first_name || row.wm_first_name || '') : '',
+    last_name: isFilled ? (row.last_name || row.wm_last_name || '') : '',
     house_name: houseName,
     houseName: houseName,
     phone,
     phone_number: phone,
-    email: isFilled ? (row.email || null) : null,
+    email,
     ward_id: row.ward_id ? String(row.ward_id) : null,
     ward_name: row.ward_name || '',
     wardName: row.ward_name || '',
@@ -239,11 +316,21 @@ export const createSeat = async (req: Request, res: Response): Promise<void> => 
 
 /**
  * PUT /api/parish-council/seats/:id/assign
- * Strictly validates that member_id exists in members table before assigning the seat.
+ * Assigns a registered parishioner (or updated ward representative details) and keeps wards table synced.
  */
 export const assignSeat = async (req: Request, res: Response): Promise<void> => {
   const id = parseId(req.params.id);
-  const { memberId, member_id, term } = req.body;
+  const {
+    memberId,
+    member_id,
+    occupantName,
+    occupant_name,
+    representativeName,
+    representative_name,
+    phone,
+    representative_phone,
+    term,
+  } = req.body;
   const targetMemberId = parseId(memberId || member_id);
 
   if (!id) {
@@ -251,43 +338,67 @@ export const assignSeat = async (req: Request, res: Response): Promise<void> => 
     return;
   }
 
-  if (!targetMemberId) {
-    res.status(400).json({ error: 'A valid registered member_id is required to assign a seat.' });
-    return;
-  }
-
   try {
-    const memRes = await pool.query(
-      `SELECT m.id, m.first_name, m.last_name, m.phone_number
-       FROM members m
-       WHERE m.id = $1`,
-      [targetMemberId]
-    );
+    await ensureWardsSyncSchema();
+    const seatRes = await pool.query('SELECT * FROM parish_council WHERE id = $1', [id]);
+    if (seatRes.rows.length === 0) {
+      res.status(404).json({ error: 'Seat not found.' });
+      return;
+    }
+    const seat = seatRes.rows[0];
+    const hasWardLink = Boolean(seat.ward_id);
 
-    if (memRes.rows.length === 0) {
-      res.status(404).json({ error: 'Selected member does not exist in the parish directory.' });
+    const explicitName = (occupantName || occupant_name || representativeName || representative_name || '').trim();
+    const explicitPhone = (phone || representative_phone || '').trim();
+
+    let finalMemberId: number | null = null;
+    let finalName: string | null = explicitName || null;
+    let finalPhone: string | null = explicitPhone || null;
+
+    if (targetMemberId) {
+      const memRes = await pool.query(
+        `SELECT m.id, m.first_name, m.last_name, m.phone_number
+         FROM members m
+         WHERE m.id = $1`,
+        [targetMemberId]
+      );
+
+      if (memRes.rows.length === 0) {
+        res.status(404).json({ error: 'Selected member does not exist in the parish directory.' });
+        return;
+      }
+
+      const m = memRes.rows[0];
+      finalMemberId = m.id;
+      finalName = finalName || `${m.first_name || ''} ${m.last_name || ''}`.trim();
+      finalPhone = finalPhone || m.phone_number || null;
+    } else if (!hasWardLink || !finalName) {
+      res.status(400).json({ error: 'A valid registered member_id is required to assign a seat.' });
       return;
     }
 
-    const m = memRes.rows[0];
-    const pName = `${m.first_name || ''} ${m.last_name || ''}`.trim();
-    const pPhone = m.phone_number || null;
-
-    const updateRes = await pool.query(
+    await pool.query(
       `UPDATE parish_council SET
          member_id = $1,
          occupant_name = $2,
          phone = $3,
          term = COALESCE(NULLIF($4, ''), term),
          status = 'filled'
-       WHERE id = $5
-       RETURNING id`,
-      [m.id, pName, pPhone, term ? String(term).trim() : '', id]
+       WHERE id = $5`,
+      [finalMemberId, finalName, finalPhone, term ? String(term).trim() : '', id]
     );
 
-    if (updateRes.rows.length === 0) {
-      res.status(404).json({ error: 'Seat not found.' });
-      return;
+    // Two-way sync back to wards table if this seat represents a Ward
+    if (hasWardLink) {
+      await pool.query(
+        `UPDATE wards SET
+           representative_name = $1,
+           representative_phone = $2,
+           contact_phone = $2,
+           representative_id = $3
+         WHERE id = $4`,
+        [finalName, finalPhone, finalMemberId, seat.ward_id]
+      );
     }
 
     const joined = await pool.query(`${SEAT_SELECT_QUERY} WHERE pc.id = $1`, [id]);
@@ -300,7 +411,7 @@ export const assignSeat = async (req: Request, res: Response): Promise<void> => 
 
 /**
  * PUT /api/parish-council/seats/:id/vacate
- * Clears member_id and returns seat to vacant state.
+ * Clears member_id and returns seat (plus linked ward representative if ward_id present) to vacant state.
  */
 export const vacateSeat = async (req: Request, res: Response): Promise<void> => {
   const id = parseId(req.params.id);
@@ -310,6 +421,7 @@ export const vacateSeat = async (req: Request, res: Response): Promise<void> => 
   }
 
   try {
+    await ensureWardsSyncSchema();
     const result = await pool.query(
       `UPDATE parish_council SET
          member_id = NULL,
@@ -317,13 +429,26 @@ export const vacateSeat = async (req: Request, res: Response): Promise<void> => 
          phone = NULL,
          status = 'vacant'
        WHERE id = $1
-       RETURNING id`,
+       RETURNING id, ward_id`,
       [id]
     );
 
     if (result.rows.length === 0) {
       res.status(404).json({ error: 'Seat not found.' });
       return;
+    }
+
+    const wardId = result.rows[0].ward_id;
+    if (wardId) {
+      await pool.query(
+        `UPDATE wards SET
+           representative_name = NULL,
+           representative_phone = NULL,
+           contact_phone = NULL,
+           representative_id = NULL
+         WHERE id = $1`,
+        [wardId]
+      );
     }
 
     const joined = await pool.query(`${SEAT_SELECT_QUERY} WHERE pc.id = $1`, [id]);

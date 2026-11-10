@@ -72,9 +72,9 @@ export default function ParishCouncilScreen() {
                 `${firstName} ${lastName}`.trim() ||
                 '';
               const isFilled =
-                Boolean(item.member_id) &&
-                item.status === 'filled' &&
-                Boolean(resolvedName);
+                (item.status === 'filled' || Boolean(item.member_id)) &&
+                Boolean(resolvedName) &&
+                resolvedName.toLowerCase() !== 'unassigned';
               const rawTitle = item.seat_title || item.role_title || item.roleTitle || item.seat || 'Council Seat';
               const isExec =
                 (item.category || '').toLowerCase() === 'executive' ||
